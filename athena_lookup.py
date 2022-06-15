@@ -101,6 +101,14 @@ class Athena_lookup():
         self.aws_params['query'] = query
         self.query_results()
 
+    def drop_all_tables(self):
+        query = f"""DROP TABLE IF EXISTS url_list;"""
+        self.execute_query(query)
+        query = f"""DROP TABLE IF EXISTS ccindex;"""
+        self.execute_query(query)
+        query = f"""DROP TABLE IF EXISTS urls_merged_cc;"""
+        self.execute_query(query)
+
     def create_url_list_table(self):
         query = f"""CREATE EXTERNAL TABLE IF NOT EXISTS url_list (
         websiteaddress               STRING, 
@@ -207,6 +215,7 @@ class Athena_lookup():
         self.execute_query(query)
 
     def run_lookup(self):
+        self.drop_all_tables()
         self.create_url_list_table()
         self.create_ccindex_table()
         self.repair_ccindex_table()

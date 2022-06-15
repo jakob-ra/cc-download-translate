@@ -5,7 +5,7 @@ from athena_lookup import Athena_lookup
 import argparse
 
 # params
-s3path_url_list = 's3://cc-extract/dataprovider_all_months/' # folder where url list is stored, needs to be without 'www.'
+s3path_url_list = 's3://cc-extract/dataprovider_all_months/sample   ' # folder where url list is stored, needs to be without 'www.'
 output_bucket = 'cc-extract' # bucket to store the results
 output_path = 'urls_merged_cc' # path in output_bucket to store the results
 crawl='CC-MAIN-2020-16' # crawl name, for list see https://commoncrawl.org/the-data/get-started/
@@ -51,11 +51,6 @@ athena_lookup.run_lookup()
 # if __name__ == '__main__':
 #     main()
 
-
-import pandas as pd
-
-df = pd.read_csv('/Users/Jakob/Downloads/dataprovider_merged_orbis_all_months_unique_urls.csv')
-df.sample(1000).to_csv('/Users/Jakob/Downloads/dataprovider_merged_orbis_all_months_unique_urls_sample.csv')
 
 
 # import pandas as pd
