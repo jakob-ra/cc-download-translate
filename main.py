@@ -5,7 +5,7 @@ from athena_lookup import Athena_lookup
 import argparse
 
 # params
-s3path_url_list = 's3://cc-extract/dataprovider_all_months/sample   ' # folder where url list is stored, needs to be without 'www.'
+s3path_url_list = 's3://cc-extract/dataprovider_all_months' # folder where url list is stored, needs to be without 'www.'
 output_bucket = 'cc-extract' # bucket to store the results
 output_path = 'urls_merged_cc' # path in output_bucket to store the results
 crawl='CC-MAIN-2020-16' # crawl name, for list see https://commoncrawl.org/the-data/get-started/
@@ -28,12 +28,17 @@ url_keywords = ['covid', 'corona', 'news', 'press', 'update'] # additionaly incl
 session = boto3.Session()
 
 athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawl, n_subpages, url_keywords)
+# athena_lookup.drop_all_tables()
 # athena_lookup.create_url_list_table()
 # athena_lookup.create_ccindex_table()
 # athena_lookup.repair_ccindex_table()
 # athena_lookup.inner_join()
 # athena_lookup.select_subpages()
 athena_lookup.run_lookup()
+
+
+subpages_per_job = 1000 # number of subpages to download per job
+
 
 # def main():
 #     parser = argparse.ArgumentParser(

@@ -57,9 +57,12 @@ class Athena_lookup():
                         'OutputLocation']
                     print('')
                     # get size of output file
-                    output_size = self.s3_client.head_object(Bucket=params['bucket'],
-                                                             Key=location.split(params['bucket'] +'/')[1])['ContentLength']
-                    print(f'Query successful! Results are available at {location}. Total size: {output_size*1e-9:.2f}GB.')
+                    try:
+                        output_size = self.s3_client.head_object(Bucket=params['bucket'],
+                                            Key=location.split(params['bucket'] +'/')[1])['ContentLength']
+                        print(f'Query successful! Results are available at {location}. Total size: {output_size*1e-9:.2f}GB.')
+                    except:
+                        print(f'Query successful! Results are available at {location}.')
 
                     ## Function to get output results
                     if return_results:
@@ -86,7 +89,7 @@ class Athena_lookup():
 
                 else:
                     print(
-                        f'Time elapsed: {execution_time / 1000}s. Data scanned: {data_scanned * 1e-9:.2f}GB. Total cost: {data_scanned * 1e-12:.2f}$.',
+                        f'Time elapsed: {execution_time / 1000}s. Data scanned: {data_scanned * 1e-9:.2f}GB. Total cost: {data_scanned*1e-12*athena_price_per_tb:.2f}$.',
                         end='\r')
                     time.sleep(1)
 
@@ -104,8 +107,8 @@ class Athena_lookup():
     def drop_all_tables(self):
         query = f"""DROP TABLE IF EXISTS url_list;"""
         self.execute_query(query)
-        query = f"""DROP TABLE IF EXISTS ccindex;"""
-        self.execute_query(query)
+        # query = f"""DROP TABLE IF EXISTS ccindex;"""
+        # self.execute_query(query)
         query = f"""DROP TABLE IF EXISTS urls_merged_cc;"""
         self.execute_query(query)
 
@@ -171,11 +174,10 @@ class Athena_lookup():
                warc_record_offset + warc_record_length - 1 as warc_record_end,
                crawl,
                subset
-        FROM ccindex
-        JOIN url_list ON ccindex.url_host_registered_domain = url_list.websiteaddress
+        FROM ccindex.ccindex
+        JOIN ccindex.url_list ON ccindex.ccindex.url_host_registered_domain = ccindex.url_list.websiteaddress
         WHERE crawl = '{self.crawl}'
           AND subset = 'warc'""" # -- (... OR crawl = 'CC-MAIN-2020-24')
-
         self.execute_query(query)
 
     def select_subpages(self):
