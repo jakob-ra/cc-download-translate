@@ -97,8 +97,9 @@ class Athena_lookup():
             return None, None
 
         except KeyboardInterrupt:
-            client.stop_query_execution(QueryExecutionId=response_query_execution_id['QueryExecutionId'])
+            self.athena_client.stop_query_execution(QueryExecutionId=response_query_execution_id['QueryExecutionId'])
             print('Keyboard interrupt: Query cancelled.')
+            sys.exit(0)
 
     def execute_query(self, query):
         self.aws_params['query'] = query
@@ -187,8 +188,7 @@ class Athena_lookup():
                     warc_filename,
                     warc_record_offset,
                     warc_record_end,
-                    crawl,
-                    subset
+                    crawl
                     from (
                 select url,
                     url_host_name,
@@ -197,7 +197,6 @@ class Athena_lookup():
                     warc_record_offset,
                     warc_record_end,
                     crawl,
-                    subset,
                     row_number() over (partition by url_host_name order by length(url) asc) as subpage_rank 
                 from urls_merged_cc) ranks
             where subpage_rank <= {self.n_subpages}
@@ -210,8 +209,8 @@ class Athena_lookup():
                     warc_filename,
                     warc_record_offset,
                     warc_record_end,
-                    crawl,
-                    subset FROM urls_merged_cc
+                    crawl
+                    FROM urls_merged_cc
             WHERE """ + ' OR '.join([f"url LIKE '%{keyword}%'" for keyword in self.url_keywords])
 
         self.execute_query(query)
@@ -226,11 +225,9 @@ class Athena_lookup():
 
 
 
-
 # awsparams['query'] = 'SELECT * FROM ccindex limit 10;'
 #
 # location, result = athena_query.query_results(client, aws_params)
-#
 #
 #
 #

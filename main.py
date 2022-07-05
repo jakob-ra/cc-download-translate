@@ -3,9 +3,10 @@
 import boto3
 from athena_lookup import Athena_lookup
 import argparse
+import pandas as pd
 
 # params
-s3path_url_list = 's3://cc-extract/dataprovider_all_months' # folder where url list is stored, needs to be without 'www.'
+s3path_url_list = 's3://cc-extract/dataprovider_all_months_sample' # folder where url list is stored, needs to be without 'www.'
 output_bucket = 'cc-extract' # bucket to store the results
 output_path = 'urls_merged_cc' # path in output_bucket to store the results
 crawl='CC-MAIN-2020-16' # crawl name, for list see https://commoncrawl.org/the-data/get-started/
@@ -36,6 +37,12 @@ athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawl, n_sub
 # athena_lookup.select_subpages()
 athena_lookup.run_lookup()
 
+df = pd.read_csv('/Users/Jakob/Downloads/61df3a7f-7b61-474c-ae91-1a6dd08d2ded.csv')
+
+df.url_host_registered_domain.value_counts().head(10000).sum()
+
+
+df.groupby('url_host_registered_domain').head(100)
 
 subpages_per_job = 1000 # number of subpages to download per job
 
