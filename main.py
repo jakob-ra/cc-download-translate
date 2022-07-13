@@ -15,6 +15,7 @@ available_crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24', 'CC-MAIN-2020-29', 'CC
                     'CC-MAIN-2021-10', 'CC-MAIN-2021-17', 'CC-MAIN-2021-21', 'CC-MAIN-2021-25',
                     'CC-MAIN-2021-31', 'CC-MAIN-2021-39', 'CC-MAIN-2021-43', 'CC-MAIN-2021-49',
                     'CC-MAIN-2022-05']
+
 aws_params = {
     'region': 'us-east-1',
     'catalog': 'AwsDataCatalog',
