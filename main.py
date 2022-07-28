@@ -22,7 +22,7 @@ aws_params = {
     'database': 'ccindex',
     'bucket': output_bucket,
     'path': output_path
-}
+} 
 n_subpages = 10 # number of subpages to download per domain
 url_keywords = ['covid', 'corona', 'news', 'press', 'update'] # additionaly include subpages with these keywords in the url
 
