@@ -6,15 +6,17 @@ import argparse
 import pandas as pd
 
 # params
-s3path_url_list = 's3://cc-extract/dataprovider_all_months_sample' # folder where url list is stored, needs to be without 'www.'
+s3path_url_list = 's3://cc-extract/dataprovider_all_months' # folder where url list is stored, starts with 's3://'
 output_bucket = 'cc-extract' # bucket to store the results
 output_path = 'urls_merged_cc' # path in output_bucket to store the results
-crawl='CC-MAIN-2020-16' # crawl name, for list see https://commoncrawl.org/the-data/get-started/
+crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24'] # crawl name, for list see https://commoncrawl.org/the-data/get-started/
+# available_crawls = pd.read_csv('common-crawls.txt')
 available_crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24', 'CC-MAIN-2020-29', 'CC-MAIN-2020-34',
                     'CC-MAIN-2020-40', 'CC-MAIN-2020-45', 'CC-MAIN-2020-50', 'CC-MAIN-2021-04',
                     'CC-MAIN-2021-10', 'CC-MAIN-2021-17', 'CC-MAIN-2021-21', 'CC-MAIN-2021-25',
                     'CC-MAIN-2021-31', 'CC-MAIN-2021-39', 'CC-MAIN-2021-43', 'CC-MAIN-2021-49',
-                    'CC-MAIN-2022-05']
+                    'CC-MAIN-2022-05', 'CC-MAIN-2022-21', 'CC-MAIN-2022-27', 'CC-MAIN-2022-33']
+
 
 aws_params = {
     'region': 'us-east-1',
@@ -22,18 +24,21 @@ aws_params = {
     'database': 'ccindex',
     'bucket': output_bucket,
     'path': output_path
-} 
+}
+
 n_subpages = 10 # number of subpages to download per domain
 url_keywords = ['covid', 'corona', 'news', 'press', 'update'] # additionaly include subpages with these keywords in the url
 
 # start up session
 session = boto3.Session()
 
-athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawl, n_subpages, url_keywords)
+athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawls, n_subpages, url_keywords,
+                              limit_cc_table=10000, keep_ccindex=True)
 # athena_lookup.drop_all_tables()
 # athena_lookup.create_url_list_table()
-# athena_lookup.create_ccindex_table()
-# athena_lookup.repair_ccindex_table()
+# # athena_lookup.create_ccindex_table()
+# # athena_lookup.repair_ccindex_table()
+# athena_lookup.subset_ccindex_table()
 # athena_lookup.inner_join()
 # athena_lookup.select_subpages()
 athena_lookup.run_lookup()

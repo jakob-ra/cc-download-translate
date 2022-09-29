@@ -1,37 +1,50 @@
 import time
 import pandas as pd
 import sys
+import math
+
+def convert_size(size_bytes):
+   if size_bytes == 0:
+       return "0B"
+   size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+   i = int(math.floor(math.log(size_bytes, 1024)))
+   p = math.pow(1024, i)
+   s = round(size_bytes / p, 2)
+   return "%s %s" % (s, size_name[i])
 
 class Athena_lookup():
-    def __init__(self, session, aws_params, s3path_url_list, crawl, n_subpages, url_keywords):
+    def __init__(self, session, aws_params: dict, s3path_url_list, crawls: list, n_subpages: int, url_keywords: list,
+                 athena_price_per_tb=5, wait_seconds=3600, limit_cc_table=10000, keep_ccindex=False):
         self.athena_client = session.client('athena')
         self.s3_client = session.client('s3')
         self.aws_params = aws_params
         self.s3path_url_list = s3path_url_list
-        self.crawl = crawl
+        self.crawls = crawls
         self.n_subpages = n_subpages
         self.url_keywords = url_keywords
+        self.athena_price_per_tb = athena_price_per_tb
+        self.wait_seconds = wait_seconds
+        self.limit_cc_table = limit_cc_table # to keep costs low for debugging, this should be None for full table
+        self.total_cost = 0
+        self.ccindex_table_name = 'ccindex'
+        self.keep_ccindex = keep_ccindex
+
 
     @staticmethod
     def get_var_char_values(d):
         return [obj['VarCharValue'] if len(obj) > 0 else None for obj in d['Data']]
 
-    def query_results(self, return_results=False, wait_seconds=3600, athena_price_per_tb=5):
+    def query_results(self, return_results=False):
         try:
             athena_client = self.athena_client
             params = self.aws_params
+            wait_seconds = self.wait_seconds
             print('Starting query:\n' + params['query'])
             ## This function executes the query and returns the query execution ID
             response_query_execution_id = athena_client.start_query_execution(QueryString=params['query'],
-                                                                       QueryExecutionContext={
-                                                                               'Database': params[
-                                                                                   'database']},
-                                                                       ResultConfiguration={
-                                                                               'OutputLocation': 's3://' +
-                                                                                                 params[
-                                                                                                     'bucket'] + '/' +
-                                                                                                 params[
-                                                                                                     'path']})
+                 QueryExecutionContext={'Database': params['database']},
+                 ResultConfiguration={'OutputLocation': 's3://' + params['bucket'] + '/' + params['path']}
+                 )
 
             while wait_seconds > 0:
                 wait_seconds = wait_seconds - 1
@@ -45,22 +58,32 @@ class Athena_lookup():
                         'DataScannedInBytes']
                 except KeyError:
                     data_scanned = 0
+                cost = data_scanned * 1e-12 * self.athena_price_per_tb
+
 
                 if (status == 'FAILED') or (status == 'CANCELLED'):
                     failure_reason = response_get_query_details['QueryExecution']['Status'][
                         'StateChangeReason']
+                    try:
+                        self.total_cost += cost
+                    except:
+                        pass
                     print(failure_reason)
                     sys.exit(0)
 
                 elif status == 'SUCCEEDED':
                     location = response_get_query_details['QueryExecution']['ResultConfiguration'][
                         'OutputLocation']
+                    try:
+                        self.total_cost += cost
+                    except:
+                        pass
                     print('')
                     # get size of output file
                     try:
                         output_size = self.s3_client.head_object(Bucket=params['bucket'],
                                             Key=location.split(params['bucket'] +'/')[1])['ContentLength']
-                        print(f'Query successful! Results are available at {location}. Total size: {output_size*1e-9:.2f}GB.')
+                        print(f'Query successful! Results are available at {location}. Total size: {convert_size(output_size)}')
                     except:
                         print(f'Query successful! Results are available at {location}.')
 
@@ -89,7 +112,7 @@ class Athena_lookup():
 
                 else:
                     print(
-                        f'Time elapsed: {execution_time / 1000}s. Data scanned: {data_scanned * 1e-9:.2f}GB. Total cost: {data_scanned*1e-12*athena_price_per_tb:.2f}$.',
+                        f'Time elapsed: {execution_time / 1000}s. Data scanned: {convert_size(data_scanned)}. Total cost: {self.total_cost+cost:.2f}$.',
                         end='\r')
                     time.sleep(1)
 
@@ -108,12 +131,16 @@ class Athena_lookup():
     def drop_all_tables(self):
         query = f"""DROP TABLE IF EXISTS url_list;"""
         self.execute_query(query)
-        # query = f"""DROP TABLE IF EXISTS ccindex;"""
-        # self.execute_query(query)
+        if not self.keep_ccindex:
+            query = f"""DROP TABLE IF EXISTS ccindex;"""
+            self.execute_query(query)
+        query = f"""DROP TABLE IF EXISTS ccindex_smaller;"""
+        self.execute_query(query)
         query = f"""DROP TABLE IF EXISTS urls_merged_cc;"""
         self.execute_query(query)
 
     def create_url_list_table(self):
+        # to-do: make unspecific to bvdid
         query = f"""CREATE EXTERNAL TABLE IF NOT EXISTS url_list (
         websiteaddress               STRING, 
         bvdidnumber                  STRING)
@@ -162,10 +189,53 @@ class Athena_lookup():
         self.execute_query(query)
 
     def repair_ccindex_table(self):
-        query = f"""MSCK REPAIR TABLE ccindex;"""
+        query = f"""MSCK REPAIR TABLE {self.ccindex_table_name};"""
         self.execute_query(query)
 
+    # def subset_ccindex_table(self):
+    #     # limit (for debugging)
+    #     if self.limit_cc_table == None:
+    #         limit = ''
+    #     else:
+    #         limit = 'LIMIT ' + str(self.limit_cc_table)
+    #
+    #     # if list of crawls specified, join them with OR: (crawl = 'CC-MAIN-2020-24' OR crawl = 'CC-MAIN-2020-52')
+    #     crawls = '(' + ' OR '.join(f'crawl = \'{w}\'' for w in self.crawls) + ')'
+    #
+    #     query = f"""Create table ccindex_smaller AS
+    #     SELECT url,
+    #            url_host_name,
+    #            url_host_registered_domain,
+    #            warc_filename,
+    #            warc_record_offset,
+    #            warc_record_offset + warc_record_length - 1 as warc_record_end,
+    #            crawl,
+    #            subset
+    #     FROM ccindex.ccindex
+    #     WHERE {crawls}
+    #       AND subset = 'warc'
+    #     {limit};"""
+    #     self.execute_query(query)
+    #     self.ccindex_table_name = 'ccindex_smaller'
+
+    # def inner_join(self):
+    #     query = f"""CREATE TABLE urls_merged_cc AS
+    #     SELECT *
+    #     FROM {self.ccindex_table_name}, url_list
+    #     WHERE {self.ccindex_table_name}.url_host_registered_domain = url_list.websiteaddress
+    #     """
+    #     self.execute_query(query)
+
     def inner_join(self):
+        # limit (for debugging)
+        if self.limit_cc_table:
+            limit = 'LIMIT ' + str(self.limit_cc_table)
+        else:
+            limit = ''
+
+        # if list of crawls specified, join them with OR: (crawl = 'CC-MAIN-2020-24' OR crawl = 'CC-MAIN-2020-52')
+        crawls = '(' + ' OR '.join(f'crawl = \'{w}\'' for w in self.crawls) + ')'
+
         query = f"""CREATE TABLE urls_merged_cc AS
         SELECT url,
                url_host_name,
@@ -175,10 +245,11 @@ class Athena_lookup():
                warc_record_offset + warc_record_length - 1 as warc_record_end,
                crawl,
                subset
-        FROM ccindex.ccindex
-        JOIN ccindex.url_list ON ccindex.ccindex.url_host_registered_domain = ccindex.url_list.websiteaddress
-        WHERE crawl = '{self.crawl}'
-          AND subset = 'warc'""" # -- (... OR crawl = 'CC-MAIN-2020-24')
+        FROM {self.ccindex_table_name}, url_list
+        WHERE {crawls}
+          AND subset = 'warc'
+          AND {self.ccindex_table_name}.url_host_registered_domain = url_list.websiteaddress
+        {limit}"""
         self.execute_query(query)
 
     def select_subpages(self):
@@ -218,10 +289,13 @@ class Athena_lookup():
     def run_lookup(self):
         self.drop_all_tables()
         self.create_url_list_table()
-        self.create_ccindex_table()
-        self.repair_ccindex_table()
+        if not self.keep_ccindex:
+            self.create_ccindex_table()
+            self.repair_ccindex_table()
+        # self.subset_ccindex_table()
         self.inner_join()
         self.select_subpages()
+
 
 
 
