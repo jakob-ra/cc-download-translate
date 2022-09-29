@@ -1,12 +1,11 @@
-FROM amazonlinux:latest
+FROM python:3.10.7
 
-RUN yum -y install git
-RUN git clone https://github.com/jakob-ra/cc-download
-RUN cd cc-download
-RUN yum -y install pip
+WORKDIR /cc-download
+
+COPY requirements.txt .
+
 RUN pip install -r requirements.txt
-ADD fetch_and_run.sh /usr/local/bin/fetch_and_run.sh
-WORKDIR /tmp
-USER nobody
 
-ENTRYPOINT ["/usr/local/bin/fetch_and_run.sh"]
+COPY cc-download ./cc-download
+
+CMD ["python", "./cc-download/cc-download.py"]

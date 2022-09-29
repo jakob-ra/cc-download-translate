@@ -2,7 +2,6 @@
 # Then, configure the session with your AWS credentials by running "aws configure" in your terminal
 import boto3
 from athena_lookup import Athena_lookup
-import argparse
 import pandas as pd
 
 # params
