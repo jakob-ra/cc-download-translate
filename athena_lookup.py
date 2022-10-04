@@ -2,6 +2,7 @@ import time
 import pandas as pd
 import sys
 import math
+import s3fs
 
 def convert_size(size_bytes):
    if size_bytes == 0:
