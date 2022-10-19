@@ -25,10 +25,11 @@ class Athena_lookup():
         self.url_keywords = url_keywords
         self.athena_price_per_tb = athena_price_per_tb
         self.wait_seconds = wait_seconds
-        self.limit_cc_table = limit_cc_table # to keep costs low for debugging, this should be None for full table
+        self.limit_cc_table = limit_cc_table # to keep costs low for debugging; this should be None for full table
         self.total_cost = 0
         self.ccindex_table_name = 'ccindex'
         self.keep_ccindex = keep_ccindex
+        self.limit_pages_url_keywords = 100
 
 
     @staticmethod
@@ -127,7 +128,9 @@ class Athena_lookup():
 
     def execute_query(self, query):
         self.aws_params['query'] = query
-        self.query_results()
+        res = self.query_results()
+
+        return res
 
     def drop_all_tables(self):
         query = f"""DROP TABLE IF EXISTS url_list;"""
@@ -135,9 +138,9 @@ class Athena_lookup():
         if not self.keep_ccindex:
             query = f"""DROP TABLE IF EXISTS ccindex;"""
             self.execute_query(query)
-        query = f"""DROP TABLE IF EXISTS ccindex_smaller;"""
-        self.execute_query(query)
         query = f"""DROP TABLE IF EXISTS urls_merged_cc;"""
+        self.execute_query(query)
+        query = f"""DROP TABLE IF EXISTS cc_merged_to_download;"""
         self.execute_query(query)
 
     def create_url_list_table(self):
@@ -254,7 +257,7 @@ class Athena_lookup():
         self.execute_query(query)
 
     def select_subpages(self):
-        query = f"""select url,
+        query = f"""create table cc_merged_to_download as select url,
                     url_host_name,
                     url_host_registered_domain,
                     warc_filename,
@@ -262,30 +265,61 @@ class Athena_lookup():
                     warc_record_end,
                     crawl
                     from (
-                select url,
-                    url_host_name,
-                    url_host_registered_domain,
-                    warc_filename,
-                    warc_record_offset,
-                    warc_record_end,
-                    crawl,
-                    row_number() over (partition by url_host_name order by length(url) asc) as subpage_rank 
-                from urls_merged_cc) ranks
-            where subpage_rank <= {self.n_subpages}
+                        select url,
+                        url_host_name,
+                        url_host_registered_domain,
+                        warc_filename,
+                        warc_record_offset,
+                        warc_record_end,
+                        crawl,
+                        row_number() over (partition by url_host_name order by length(url) asc) as subpage_rank 
+                        from urls_merged_cc) ranks
+                    where subpage_rank <= {self.n_subpages}
+                    
+                    UNION
             
-            UNION
-            
-            SELECT url,
-                    url_host_name,
-                    url_host_registered_domain,
-                    warc_filename,
-                    warc_record_offset,
-                    warc_record_end,
-                    crawl
-                    FROM urls_merged_cc
-            WHERE """ + ' OR '.join([f"url LIKE '%{keyword}%'" for keyword in self.url_keywords])
+                    (SELECT url,
+                            url_host_name,
+                            url_host_registered_domain,
+                            warc_filename,
+                            warc_record_offset,
+                            warc_record_end,
+                            crawl
+                            FROM urls_merged_cc
+                    WHERE """ + ' OR '.join([f"url LIKE '%{keyword}%'" for keyword in self.url_keywords])\
+                    + f'LIMIT {self.limit_pages_url_keywords})'
 
         self.execute_query(query)
+
+        # self.download_table_location,_ = self.execute_query(query)
+
+    def get_length_download_table(self):
+        query = f"""select count(*) from cc_merged_to_download"""
+
+        download_table_length_location, _ = self.execute_query(query)
+
+        self.download_table_length = pd.read_csv(download_table_length_location).values[0][0]
+
+        # find number of unique hostnames
+        query = f"""select count(distinct url_host_registered_domain) from cc_merged_to_download"""
+
+        download_table_n_unique_host_location, _ = self.execute_query(query)
+
+        self.n_unique_hosts = pd.read_csv(download_table_n_unique_host_location).values[0][0]
+
+    def save_table_as_csv(self):
+        query = f"""SELECT * FROM cc_merged_to_download"""
+
+        self.download_table_location,_  = self.execute_query(query)
+
+    # def get_length_download_table(self):
+    #     f""" CREATE EXTERNAL TABLE urls_merged_cc_for_download
+    #     LOCATION '{self.download_table_location}' """
+    #     query = f"""select count(*) from urls_merged_cc"""
+    #
+    #     location = self.execute_query(query)
+    #
+    #     return location
 
     def run_lookup(self):
         self.drop_all_tables()
@@ -293,9 +327,13 @@ class Athena_lookup():
         if not self.keep_ccindex:
             self.create_ccindex_table()
             self.repair_ccindex_table()
-        # self.subset_ccindex_table()
         self.inner_join()
         self.select_subpages()
+        self.get_length_download_table()
+        # self.save_table_as_csv()
+        print(f'The results contain {self.download_table_length} subpages from {self.n_unique_hosts}'
+              f' unique hostnames.')
+
 
 
 

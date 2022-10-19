@@ -6,15 +6,15 @@ from io import BytesIO
 from bs4 import BeautifulSoup, SoupStrainer
 import os
 import argparse
+import awswrangler as wr
 
 # # parse arguments: # python cc-download.py --batch_size=100 --batch_number=5
 parser = argparse.ArgumentParser()
-parser.add_argument("--batch_size", type=int, default=100)
+parser.add_argument("--batch_size", type=int, default=1000)
 parser.add_argument("--output_bucket", type=str, default='cc-extract')
 parser.add_argument("--output_path", type=str, default='cc-download')
+# parser.add_argument("--download_table_loc", type=str, default='cc-download')
 args = parser.parse_args()
-
-
 
 covid_synonyms = ["covid", "SARS‑CoV‑2", "corona pandemic", "corona",  "covid 19" , "covid-19"
                   , "corona virus", "coronapandemie", "coronakrise", "SARS CoV 2",
@@ -54,6 +54,7 @@ def fetch_process_warc_records(row, s3client):
         page = record.content_stream().read()
 
         soup = BeautifulSoup(page, 'lxml', parse_only=only_paragraphs)
+
         text = soup.get_text()
 
         paragraphs = text.split('\n')
@@ -71,10 +72,14 @@ if __name__ == "__main__":
         batch_n = 0
         print('Processing first batch (no array index found).')
 
+    session = boto3.Session(region_name='us-east-1')
 
     # read cc-index table with warc filenames and byte positions
-    df = pd.read_csv('s3://cc-extract/urls_merged_cc/fc16332b-b3a1-449c-b440-ab0d060fdd08.csv',
-                     skiprows=range(1,batch_n*args.batch_size), nrows=args.batch_size, header=0)
+    query = f'SELECT * FROM cc_merged_to_download OFFSET {batch_n} LIMIT {args.batch_size} '
+    df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
+
+    # df = pd.read_csv(args.download_table_loc, skiprows=range(1, batch_n * args.batch_size),
+    #                  nrows=args.batch_size, header=0)
 
     # initialize s3
     s3client = boto3.client('s3', region_name='us-east-1', use_ssl=False)
@@ -97,10 +102,3 @@ if __name__ == "__main__":
 # take only unique paragraphs - doesn't make sense to do this in each batch, do this at the end instead
 # df = df.groupby(['url_host_name', 'url', 'paragraphs']).crawl.apply(set).reset_index()
 
-# to find required number of batches
-# import pandas as pd
-# chunksize = 10 ** 7
-# row_count = 0
-# for chunk in pd.read_csv('s3://cc-extract/urls_merged_cc/fc16332b-b3a1-449c-b440-ab0d060fdd08.csv', chunksize=chunksize, usecols=['url']):
-#     row_count += len(chunk)
-# req_batches = row_count//100 + 1

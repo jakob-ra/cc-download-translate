@@ -1,14 +1,20 @@
-# first, create an IAM role with full access to S3, Athena, and EC2/Batch
-# Then, configure the session with your AWS credentials by running "aws configure" in your terminal
 import boto3
 from athena_lookup import Athena_lookup
 import pandas as pd
+import os
+import s3fs
+from aws_config import aws_config_credentials
+
+region = 'us-east-1'
+profile_name = 'default'
+credentials_csv_filepath = 'C:/Users/Jakob/Downloads/jakob-s3-ec2-athena_accessKeys.csv'
+aws_config_credentials(credentials_csv_filepath, region, profile_name)
 
 # params
 s3path_url_list = 's3://cc-extract/dataprovider_all_months' # folder where url list is stored, starts with 's3://'
 output_bucket = 'cc-extract' # bucket to store the results
 output_path = 'urls_merged_cc' # path in output_bucket to store the results
-crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24'] # crawl name, for list see https://commoncrawl.org/the-data/get-started/
+crawls = ['CC-MAIN-2020-24'] # crawl name, for list see https://commoncrawl.org/the-data/get-started/
 # available_crawls = pd.read_csv('common-crawls.txt')
 available_crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24', 'CC-MAIN-2020-29', 'CC-MAIN-2020-34',
                     'CC-MAIN-2020-40', 'CC-MAIN-2020-45', 'CC-MAIN-2020-50', 'CC-MAIN-2021-04',
@@ -16,9 +22,8 @@ available_crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24', 'CC-MAIN-2020-29', 'CC
                     'CC-MAIN-2021-31', 'CC-MAIN-2021-39', 'CC-MAIN-2021-43', 'CC-MAIN-2021-49',
                     'CC-MAIN-2022-05', 'CC-MAIN-2022-21', 'CC-MAIN-2022-27', 'CC-MAIN-2022-33']
 
-
 aws_params = {
-    'region': 'us-east-1',
+    'region': region,
     'catalog': 'AwsDataCatalog',
     'database': 'ccindex',
     'bucket': output_bucket,
@@ -32,7 +37,7 @@ url_keywords = ['covid', 'corona', 'news', 'press', 'update'] # additionaly incl
 session = boto3.Session()
 
 athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawls, n_subpages, url_keywords,
-                              limit_cc_table=10000, keep_ccindex=True)
+                              limit_cc_table=None, keep_ccindex=True)
 # athena_lookup.drop_all_tables()
 # athena_lookup.create_url_list_table()
 # # athena_lookup.create_ccindex_table()
@@ -42,14 +47,47 @@ athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawls, n_su
 # athena_lookup.select_subpages()
 athena_lookup.run_lookup()
 
-df = pd.read_csv('/Users/Jakob/Downloads/61df3a7f-7b61-474c-ae91-1a6dd08d2ded.csv')
+batch_size = 10000
+req_batches = athena_lookup.download_table_length//batch_size + 1
+print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
 
-df.url_host_registered_domain.value_counts().head(10000).sum()
+
+# estimate cost
+instance_price_per_hour = 0.0035
+time_for_completion = 0.1 # 6 minutes
+instance_price_per_hour*req_batches*time_for_completion*len(available_crawls)
 
 
-df.groupby('url_host_registered_domain').head(100)
+res = pd.read_csv(athena_lookup.download_table_location)
 
-subpages_per_job = 1000 # number of subpages to download per job
+df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 * batch_size), nrows=batch_size, header=0)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# df = pd.read_csv('/Users/Jakob/Downloads/61df3a7f-7b61-474c-ae91-1a6dd08d2ded.csv')
+#
+# df.url_host_registered_domain.value_counts().head(10000).sum()
+#
+#
+# df.groupby('url_host_registered_domain').head(100)
+#
+# subpages_per_job = 1000 # number of subpages to download per job
 
 
 # def main():
@@ -152,3 +190,10 @@ subpages_per_job = 1000 # number of subpages to download per job
 # result = ddf.map_partitions(fetch_process_warc_records, meta=list)
 # result = result.compute(num_workers=os.cpu_count()-2)
 # print(time.process_time() - start)
+
+# # to find required number of batches
+# import awswrangler as wr
+# df = wr.athena.read_sql_query(sql="SELECT COUNT(*) AS count FROM urls_merged_cc_for_download", database="ccindex")
+# row_count = df.T.squeeze()
+# batch_size = 1000
+# req_batches = row_count//batch_size + 1
