@@ -97,7 +97,10 @@ if __name__ == "__main__":
     print(f'Share of URLs mentioning at least one keyword: {len(df.paragraphs[df.paragraphs.str.len()>0])/len(df)}')
 
     # explode so we have one paragraph per row
-    df = df[['url_host_name', 'url', 'crawl', 'paragraphs']].explode('paragraphs')
+    # df = df[['url_host_name', 'url', 'crawl', 'paragraphs']].explode('paragraphs')
+
+    # drop paragraphs
+    df.dropna(subset=['paragraphs'], inplace=True)
 
     # save to S3
     s3_path = f's3://{args.output_bucket}/{args.output_path}/batch_n_{batch_n}.csv'
