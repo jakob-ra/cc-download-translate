@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import s3fs
 from aws_config import aws_config_credentials
+import time
 
 region = 'us-east-1'
 profile_name = 'default'
@@ -47,9 +48,125 @@ athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawls, n_su
 # athena_lookup.select_subpages()
 athena_lookup.run_lookup()
 
-batch_size = 10000
-req_batches = athena_lookup.download_table_length//batch_size + 1
+batch_size = 5000
+req_batches = int(athena_lookup.download_table_length//batch_size + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
+
+## send commands for AWS batch download
+batch_client = session.client('batch')
+
+# get rid of old
+try:
+    batch_client.update_compute_environment(
+        computeEnvironment='cc-download',
+        state='DISABLED',
+    )
+    time.sleep(20)
+    batch_client.delete_compute_environment(
+        computeEnvironment='cc-download'
+    )
+    time.sleep(30)
+except:
+    pass
+
+attempt_n = 6
+
+# compute environment
+batch_client.create_compute_environment(
+    computeEnvironmentName=f'cc-download-{attempt_n}',
+    type='MANAGED',
+    state='ENABLED',
+    # unmanagedvCpus=1,
+    computeResources={
+        'type': 'SPOT', # 'EC2'|'SPOT'|'FARGATE'|'FARGATE_SPOT'
+        'allocationStrategy': 'SPOT_CAPACITY_OPTIMIZED', # |'BEST_FIT_PROGRESSIVE'|'SPOT_CAPACITY_OPTIMIZED'
+        'minvCpus': 1,
+        'maxvCpus': req_batches,
+        'desiredvCpus': req_batches,
+        'instanceTypes': [
+            'optimal',
+        ],
+        'instanceRole': 'arn:aws:iam::425352751544:instance-profile/ecsInstanceRole',
+        'subnets': [
+            'subnet-3fc5e11e',
+            'subnet-96402da7',
+            'subnet-84326be2',
+            'subnet-3470633a',
+            'subnet-789d7434',
+            'subnet-d4104a8b',
+        ],
+        'securityGroupIds': [
+            'sg-c4a092d8',
+        ],
+        # 'bidPercentage': 70,
+        # 'spotIamFleetRole': 'string',
+    },
+    serviceRole = 'arn:aws:iam::425352751544:role/aws-service-role/batch.amazonaws.com/AWSServiceRoleForBatch',
+    # serviceRole='arn:aws:iam::425352751544:user/jakob-s3-ec2-athena',
+)
+time.sleep(20)
+
+# job queue
+batch_client.create_job_queue(
+    jobQueueName=f'cc-download-{attempt_n}',
+    state='ENABLED',
+    priority=1,
+    computeEnvironmentOrder=[
+        {
+            'order': 1,
+            'computeEnvironment': f'cc-download-{attempt_n}'
+        },
+    ],
+)
+time.sleep(5)
+
+# job definition
+batch_client.register_job_definition(
+    jobDefinitionName=f'cc-download-{attempt_n}',
+    type='container',
+    containerProperties={
+        'image': 'public.ecr.aws/r9v1u7o6/cc-download:latest',
+        'vcpus': 1,
+        'memory': 2048,
+        'command': [
+            "python",
+            "./cc-download/cc-download.py",
+            f"--batch_size={batch_size}",
+        ],
+        'jobRoleArn': 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+        'executionRoleArn': 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+    },
+    retryStrategy={
+        'attempts': 1,
+    },
+    timeout={
+        'attemptDurationSeconds': 1800
+    },
+    platformCapabilities=[
+        'EC2',
+    ],
+)
+time.sleep(5)
+
+# submit job
+batch_client.submit_job(
+    jobName=f'cc-download-{attempt_n}',
+    jobQueue=f'cc-download-{attempt_n}',
+    arrayProperties={
+        'size': req_batches
+    },
+    jobDefinition=f'cc-download-{attempt_n}',
+    retryStrategy={
+        'attempts': 1,
+    },
+    timeout={
+        'attemptDurationSeconds': 1800
+    },
+)
+
+
+
+
 
 
 # estimate cost

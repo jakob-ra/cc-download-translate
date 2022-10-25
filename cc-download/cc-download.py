@@ -7,6 +7,9 @@ from bs4 import BeautifulSoup, SoupStrainer
 import os
 import argparse
 import awswrangler as wr
+from tqdm import tqdm
+
+tqdm.pandas()
 
 # # parse arguments: # python cc-download.py --batch_size=100 --batch_number=5
 parser = argparse.ArgumentParser()
@@ -74,6 +77,9 @@ if __name__ == "__main__":
 
     session = boto3.Session(region_name='us-east-1')
 
+    sts = session.client("sts")
+    print(sts.get_caller_identity())
+
     # read cc-index table with warc filenames and byte positions
     query = f'SELECT * FROM cc_merged_to_download OFFSET {batch_n} LIMIT {args.batch_size} '
     df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
@@ -86,7 +92,7 @@ if __name__ == "__main__":
 
     # download paragraphs and fill into new column
     start = time.process_time()
-    df['paragraphs'] = df.apply(lambda row: fetch_process_warc_records(row, s3client), axis=1)
+    df['paragraphs'] = df.progress_apply(lambda row: fetch_process_warc_records(row, s3client), axis=1)
     print(f'Success! Finished in {time.process_time() - start} seconds.')
     print(f'Share of URLs mentioning at least one keyword: {len(df.paragraphs[df.paragraphs.str.len()>0])/len(df)}')
 
