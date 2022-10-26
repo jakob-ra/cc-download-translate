@@ -7,40 +7,11 @@ from bs4 import BeautifulSoup, SoupStrainer
 import os
 import argparse
 import awswrangler as wr
-from tqdm import tqdm
 
-tqdm.pandas()
-
-# # parse arguments: # python cc-download.py --batch_size=100 --batch_number=5
-parser = argparse.ArgumentParser()
-parser.add_argument("--batch_size", type=int, default=1000)
-parser.add_argument("--output_bucket", type=str, default='cc-extract')
-parser.add_argument("--output_path", type=str, default='cc-download')
-# parser.add_argument("--download_table_loc", type=str, default='cc-download')
-args = parser.parse_args()
-
-covid_synonyms = ["covid", "SARS‑CoV‑2", "corona pandemic", "corona",  "covid 19" , "covid-19"
-                  , "corona virus", "coronapandemie", "coronakrise", "SARS CoV 2",
-                  "Wuhan virus", "pandemie", "pandemic", "2019 nCoV", "pandémie",
-                  "pandemia", "Koronapandemie", "Korona", "Coronavirus",
-                  "Coronapandemie", "Wuhan-Virus", "pandémie corona", "Virus de Wuhan", "NCoV 2019",
-                  "pandemia de corona", "coronavirus", "coronapandemia", "cobiçado 19"
-                  , "coronavírus", "Vírus Wuhan", "电晕大流行", "电晕", "冠状病毒", "冠状流感",
-                  "日冕", "武汉病毒", "大流行", "大流行", "2019年nCoV",
-                  "大流行", "कोरोना महामारी" , "कोरोना", "कोविद १ ९", "कोरोना", "ओ और ndemie",
-                  "ओ nakrise", "वुहान वायरस", "ndemie", "महामारी", "コロナパンデミック", "コロナ",
-                  "コロナウイルス", "コロナパンデミ", "コロナクリス", "武漢ウイルス", "パンデミー",
-                  "パンデミック", "パンデミー", "パンデミック", "الاكليل", "جائحة الاكليل",
-                  "مطمع ۱۹", "الفيروس التاجي", "التاج", "السارس", "فيروس ووهان",
-                  "بانديمي", "جائحة", "ncov 2019", "2019 ncov", "пандемия короны",
-                  "корона", "Ковид 19", "коронавирус", "ш и ndemie", "о в nakrise",
-                  "Уханьский вирус", "ndemie", "пандемия", "2019 нКоВ", "ndemia"]
-
-
-def fetch_process_warc_records(row, s3client):
+def fetch_process_warc_records(row, s3client, keywords):
     """Fetch all WARC records defined by filenames and offsets in batch,
     parse the records and the contained HTML, return all paragraphs containing at least one of the
-    keywords"""
+    keywords.csv"""
 
     only_paragraphs = SoupStrainer('p')
 
@@ -62,11 +33,20 @@ def fetch_process_warc_records(row, s3client):
 
         paragraphs = text.split('\n')
         covid_paragraphs += [paragraph for paragraph in paragraphs if
-                             any(ext.casefold() in paragraph.casefold() for ext in covid_synonyms)]
+                             any(ext.casefold() in paragraph.casefold() for ext in keywords)]
 
     return list(set(covid_paragraphs))
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--output_bucket", type=str, required=True)
+    parser.add_argument("--output_path", type=str, required=True)
+    parser.add_argument("--keywords",type = str, default='keywords.csv')
+    args = parser.parse_args()
+
+    keywords = pd.read_csv('keywords.csv').squeeze().tolist()
+
     if "AWS_BATCH_JOB_ARRAY_INDEX" in os.environ:
         batch_n = os.environ['AWS_BATCH_JOB_ARRAY_INDEX']
         batch_n = int(batch_n)
@@ -83,6 +63,7 @@ if __name__ == "__main__":
     # read cc-index table with warc filenames and byte positions
     query = f'SELECT * FROM cc_merged_to_download OFFSET {batch_n} LIMIT {args.batch_size} '
     df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
+    assert len(df) > 1, "Empty input table!"
 
     # df = pd.read_csv(args.download_table_loc, skiprows=range(1, batch_n * args.batch_size),
     #                  nrows=args.batch_size, header=0)
@@ -90,16 +71,16 @@ if __name__ == "__main__":
     # initialize s3
     s3client = boto3.client('s3', region_name='us-east-1', use_ssl=False)
 
-    # download paragraphs and fill into new column
+   # download paragraphs and fill into new column
     start = time.process_time()
-    df['paragraphs'] = df.progress_apply(lambda row: fetch_process_warc_records(row, s3client), axis=1)
+    df['paragraphs'] = df.apply(lambda row: fetch_process_warc_records(row, s3client, keywords), axis=1)
     print(f'Success! Finished in {time.process_time() - start} seconds.')
     print(f'Share of URLs mentioning at least one keyword: {len(df.paragraphs[df.paragraphs.str.len()>0])/len(df)}')
 
     # explode so we have one paragraph per row
     # df = df[['url_host_name', 'url', 'crawl', 'paragraphs']].explode('paragraphs')
 
-    # drop paragraphs
+    # drop pages without any paragraphs
     df.dropna(subset=['paragraphs'], inplace=True)
 
     # save to S3

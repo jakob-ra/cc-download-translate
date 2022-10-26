@@ -8,11 +8,10 @@ RUN pip install -r requirements.txt
 
 COPY cc-download ./cc-download
 
-#CMD ["python", "./cc-download/cc-download.py"]
-# python ./cc-download/cc-download.py --batch_size=10000
-# change ecsTaskExecutionRole to have S3 access
-# include cchardet lxml job role configuration
+## the command is submitted directly to AWS batch as a job definition:
+# python ./cc-download/cc-download.py --output_bucket cc-extract --output_path cc-download-test --batch_size 100 --keywords keywords.csv
 
+## to push the dockerfile to Amazon Elastic Container Registry:
 # start docker daemon
 # docker build -t cc-download .
 # docker tag cc-download:latest public.ecr.aws/r9v1u7o6/cc-download:latest

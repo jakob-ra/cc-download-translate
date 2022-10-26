@@ -6,6 +6,10 @@ import s3fs
 from aws_config import aws_config_credentials
 import time
 
+# first, create IAM user with full access to S3, Athena, Batch, download access key file as csv
+# change ecsTaskExecutionRole to have S3 access cloudwatch
+# also create a role that can be passed to
+
 region = 'us-east-1'
 profile_name = 'default'
 credentials_csv_filepath = 'C:/Users/Jakob/Downloads/jakob-s3-ec2-athena_accessKeys.csv'
@@ -14,14 +18,15 @@ aws_config_credentials(credentials_csv_filepath, region, profile_name)
 # params
 s3path_url_list = 's3://cc-extract/dataprovider_all_months' # folder where url list is stored, starts with 's3://'
 output_bucket = 'cc-extract' # bucket to store the results
-output_path = 'urls_merged_cc' # path in output_bucket to store the results
-crawls = ['CC-MAIN-2020-24'] # crawl name, for list see https://commoncrawl.org/the-data/get-started/
+index_output_path = 'urls_merged_cc' # path in output_bucket to store the index results
+crawls = ['CC-MAIN-2020-16'] # crawl name, for list see https://commoncrawl.org/the-data/get-started/
 # available_crawls = pd.read_csv('common-crawls.txt')
 available_crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24', 'CC-MAIN-2020-29', 'CC-MAIN-2020-34',
                     'CC-MAIN-2020-40', 'CC-MAIN-2020-45', 'CC-MAIN-2020-50', 'CC-MAIN-2021-04',
                     'CC-MAIN-2021-10', 'CC-MAIN-2021-17', 'CC-MAIN-2021-21', 'CC-MAIN-2021-25',
                     'CC-MAIN-2021-31', 'CC-MAIN-2021-39', 'CC-MAIN-2021-43', 'CC-MAIN-2021-49',
                     'CC-MAIN-2022-05', 'CC-MAIN-2022-21', 'CC-MAIN-2022-27', 'CC-MAIN-2022-33']
+output_path = 'cc-download/' + '_'.join(crawls) # path in output_bucket to store the downloads in batches
 
 aws_params = {
     'region': region,
@@ -32,13 +37,15 @@ aws_params = {
 }
 
 n_subpages = 10 # number of subpages to download per domain
-url_keywords = ['covid', 'corona', 'news', 'press', 'update'] # additionaly include subpages with these keywords in the url
+url_keywords = ['covid', 'corona', 'coronavirus', 'news', 'press', 'update'] # additionaly include subpages with these keywords.csv in the url
+news_translations = ["الإخبارية", "nieuws", "notizia", "ニュース", "nachrichten", "noticias", "nouvelles", "Новости"]
+url_keywords += news_translations
 
 # start up session
 session = boto3.Session()
 
 athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawls, n_subpages, url_keywords,
-                              limit_cc_table=None, keep_ccindex=True)
+                              limit_cc_table=None, keep_ccindex=False)
 # athena_lookup.drop_all_tables()
 # athena_lookup.create_url_list_table()
 # # athena_lookup.create_ccindex_table()
@@ -48,45 +55,67 @@ athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawls, n_su
 # athena_lookup.select_subpages()
 athena_lookup.run_lookup()
 
+
+
+
+
+
 batch_size = 5000
 req_batches = int(athena_lookup.download_table_length//batch_size + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
 
+req_batches = 4
+
 ## send commands for AWS batch download
 batch_client = session.client('batch')
 
-# get rid of old
-try:
-    batch_client.update_compute_environment(
-        computeEnvironment='cc-download',
-        state='DISABLED',
-    )
-    time.sleep(20)
-    batch_client.delete_compute_environment(
-        computeEnvironment='cc-download'
-    )
-    time.sleep(30)
-except:
-    pass
+attempt_n = 1
 
-attempt_n = 6
+batch_env_name = f'cc-download-{attempt_n}'
 
-# compute environment
+# # compute environment
+# batch_client.create_compute_environment(
+#     computeEnvironmentName=batch_env_name,
+#     type='MANAGED',
+#     state='ENABLED',
+#     # unmanagedvCpus=1,
+#     computeResources={
+#         'type': 'SPOT', # 'EC2'|'SPOT'|'FARGATE'|'FARGATE_SPOT'
+#         'allocationStrategy': 'SPOT_CAPACITY_OPTIMIZED', # |'BEST_FIT_PROGRESSIVE'|'SPOT_CAPACITY_OPTIMIZED'
+#         'minvCpus': 1,
+#         'maxvCpus': req_batches,
+#         'desiredvCpus': req_batches,
+#         'instanceTypes': [
+#             'a1.medium'
+#         ],
+#         'instanceRole': 'arn:aws:iam::425352751544:instance-profile/ecsInstanceRole',
+#         'subnets': [
+#             'subnet-3fc5e11e',
+#             'subnet-96402da7',
+#             'subnet-84326be2',
+#             'subnet-3470633a',
+#             'subnet-789d7434',
+#             'subnet-d4104a8b',
+#         ],
+#         'securityGroupIds': [
+#             'sg-c4a092d8',
+#         ],
+#         # 'bidPercentage': 70,
+#         # 'spotIamFleetRole': 'string',
+#     },
+#     # serviceRole = 'arn:aws:iam::425352751544:role/aws-service-role/batch.amazonaws.com/AWSServiceRoleForBatch',
+#     # serviceRole='arn:aws:iam::425352751544:user/jakob-s3-ec2-athena',
+# )
+# time.sleep(20)
+
+FARGATE
 batch_client.create_compute_environment(
-    computeEnvironmentName=f'cc-download-{attempt_n}',
+    computeEnvironmentName=batch_env_name,
     type='MANAGED',
     state='ENABLED',
-    # unmanagedvCpus=1,
     computeResources={
-        'type': 'SPOT', # 'EC2'|'SPOT'|'FARGATE'|'FARGATE_SPOT'
-        'allocationStrategy': 'SPOT_CAPACITY_OPTIMIZED', # |'BEST_FIT_PROGRESSIVE'|'SPOT_CAPACITY_OPTIMIZED'
-        'minvCpus': 1,
+        'type': 'FARGATE',
         'maxvCpus': req_batches,
-        'desiredvCpus': req_batches,
-        'instanceTypes': [
-            'optimal',
-        ],
-        'instanceRole': 'arn:aws:iam::425352751544:instance-profile/ecsInstanceRole',
         'subnets': [
             'subnet-3fc5e11e',
             'subnet-96402da7',
@@ -98,23 +127,18 @@ batch_client.create_compute_environment(
         'securityGroupIds': [
             'sg-c4a092d8',
         ],
-        # 'bidPercentage': 70,
-        # 'spotIamFleetRole': 'string',
     },
-    serviceRole = 'arn:aws:iam::425352751544:role/aws-service-role/batch.amazonaws.com/AWSServiceRoleForBatch',
-    # serviceRole='arn:aws:iam::425352751544:user/jakob-s3-ec2-athena',
 )
-time.sleep(20)
 
 # job queue
 batch_client.create_job_queue(
-    jobQueueName=f'cc-download-{attempt_n}',
+    jobQueueName=batch_env_name,
     state='ENABLED',
     priority=1,
     computeEnvironmentOrder=[
         {
             'order': 1,
-            'computeEnvironment': f'cc-download-{attempt_n}'
+            'computeEnvironment': batch_env_name,
         },
     ],
 )
@@ -122,46 +146,92 @@ time.sleep(5)
 
 # job definition
 batch_client.register_job_definition(
-    jobDefinitionName=f'cc-download-{attempt_n}',
+    jobDefinitionName=batch_env_name,
     type='container',
     containerProperties={
         'image': 'public.ecr.aws/r9v1u7o6/cc-download:latest',
-        'vcpus': 1,
-        'memory': 2048,
+        'resourceRequirements': [
+            {
+                'type': 'VCPU',
+                'value': '1',
+            },
+            {
+                'type': 'MEMORY',
+                'value': '2048',
+            },
+        ],
         'command': [
             "python",
             "./cc-download/cc-download.py",
-            f"--batch_size={batch_size}",
+            f"--batch_size {batch_size}",
+            f"--output_bucket {output_bucket}",
+            f"--output_path {output_path}",
         ],
         'jobRoleArn': 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
-        'executionRoleArn': 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
     },
     retryStrategy={
         'attempts': 1,
     },
     timeout={
-        'attemptDurationSeconds': 1800
+        'attemptDurationSeconds': 600
     },
     platformCapabilities=[
         'EC2',
     ],
 )
+
+# FARGATE
+# batch_client.register_job_definition(
+#     jobDefinitionName=batch_env_name,
+#     type='container',
+#     containerProperties={
+#         'image': 'public.ecr.aws/r9v1u7o6/cc-download:latest',
+#         'resourceRequirements': [
+#             {
+#                 'type': 'VCPU',
+#                 'value': '0.25',
+#             },
+#             {
+#                 'type': 'MEMORY',
+#                 'value': '512',
+#             },
+#         ],
+#         'command': [
+#             "python",
+#             "./cc-download/cc-download.py",
+#             f"--batch_size {batch_size}",
+#             f"--output_bucket {output_bucket}",
+#             f"--output_path {output_path}",
+#         ],
+#         # 'jobRoleArn': 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+#         'executionRoleArn':  'arn:aws:iam::425352751544:role/cc-download', # 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+#     },
+#     retryStrategy={
+#         'attempts': 1,
+#     },
+#     timeout={
+#         'attemptDurationSeconds': 600
+#     },
+#     platformCapabilities=[
+#         'FARGATE',
+#     ],
+# )
 time.sleep(5)
 
 # submit job
 batch_client.submit_job(
-    jobName=f'cc-download-{attempt_n}',
-    jobQueue=f'cc-download-{attempt_n}',
+    jobName=batch_env_name,
+    jobQueue=batch_env_name,
     arrayProperties={
         'size': req_batches
     },
-    jobDefinition=f'cc-download-{attempt_n}',
-    retryStrategy={
-        'attempts': 1,
-    },
-    timeout={
-        'attemptDurationSeconds': 1800
-    },
+    jobDefinition=batch_env_name,
+    # retryStrategy={
+    #     'attempts': 2,
+    # },
+    # timeout={
+    #     'attemptDurationSeconds': 1800
+    # },
 )
 
 
@@ -182,7 +252,53 @@ df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 
 
 
 
+# get rid of old compute environment
+try:
+    # batch_client.deregister_job_definition(jobDefinition=batch_env_name)
+    batch_client.update_job_queue(jobQueue=batch_env_name, state='DISABLED')
+    time.sleep(2)
+    batch_client.delete_job_queue(jobQueue=batch_env_name)
+    time.sleep(2)
+    batch_client.update_compute_environment(
+        computeEnvironment=batch_env_name,
+        state='DISABLED',
+    )
+    time.sleep(2)
+    batch_client.delete_compute_environment(
+        computeEnvironment='cc-download'
+    )
+    time.sleep(2)
+except:
+    pass
 
+
+
+
+# streamlined:
+# keywords.csv = ["covid", "SARS‑CoV‑2", "pandemic", "corona", "SARS", "pandemie", "pandémie", "pandemia",
+#             "pandemi", "Korona", "Wuhan-Virus", "cobiçado-19", "كورونا", "جائحة", "电晕大流行", "电晕", "冠状病毒",
+#             "冠状流感", "日冕", "武汉病毒", "大流行", "大流行", "2019年nCoV", "大流行", "कोरोना", "कोरोना", "महामारी",
+#             "コロナパンデミック", "コロナ", "コロナウイルス", "コロナパンデミ", "コロナクリス", "武漢ウイルス", "パンデミー", "パンデミック", "パンデミー",
+#             "パンデミック", "الاكليل", "التاج", "السارس", "بانديمي", "جائحة", "пандемия", "корона", "Ковид"]
+
+# old version:
+# keywords = ["covid", "SARS‑CoV‑2", "corona pandemic", "corona", "covid 19" , "covid-19"
+#                   , "corona virus", "coronapandemie", "coronakrise", "SARS CoV 2",
+#                   "Wuhan virus", "pandemie", "pandemic", "2019 nCoV", "pandémie",
+#                   "pandemia", "Koronapandemie", "Korona", "Coronavirus",
+#                   "Coronapandemie", "Wuhan-Virus", "pandémie corona", "Virus de Wuhan", "NCoV 2019",
+#                   "pandemia de corona", "coronavirus", "coronapandemia", "cobiçado 19"
+#                   , "coronavírus", "Vírus Wuhan", "电晕大流行", "电晕", "冠状病毒", "冠状流感",
+#                   "日冕", "武汉病毒", "大流行", "大流行", "2019年nCoV",
+#                   "大流行", "कोरोना महामारी" , "कोरोना", "कोविद १ ९", "कोरोना", "ओ और ndemie",
+#                   "ओ nakrise", "वुहान वायरस", "ndemie", "महामारी", "コロナパンデミック", "コロナ",
+#                   "コロナウイルス", "コロナパンデミ", "コロナクリス", "武漢ウイルス", "パンデミー",
+#             "パンデミック", "パンデミー", "パンデミック", "الاكليل", "جائحة الاكليل",
+#             "مطمع ۱۹", "الفيروس التاجي", "التاج", "السارس", "فيروس ووهان",
+#             "بانديمي", "جائحة", "ncov 2019", "2019 ncov", "пандемия короны",
+#             "корона", "Ковид 19", "коронавирус", "ш и ndemie", "о в nakrise",
+#             "Уханьский вирус", "ndemie", "пандемия", "2019 нКоВ", "ndemia"]
+# pd.Series(keywords, name='keyword').to_csv('keywords.csv', index=False)
 
 
 
@@ -212,7 +328,7 @@ df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 
 #         prog='athena',
 #         usage='athena [--debug] [--execute <statement>] [--output-format <format>] [--schema <schema>]'
 #               ' [--profile <profile>] [--region <region>] [--s3-bucket <bucket>] [--server-side-encryption] [--version]',
-#         description='Download html paragraphs containing keywords from CommonCrawl archive, using an URL list.',
+#         description='Download html paragraphs containing keywords.csv from CommonCrawl archive, using an URL list.',
 #     )
 #     parser.add_argument(
 #         '--debug',
@@ -241,7 +357,7 @@ df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 
 # import dask.dataframe as dd
 #
 #
-# covid_synonyms = ["covid", "SARS‑CoV‑2", "corona pandemic", "corona",  "covid 19" , "covid-19"
+# keywords.csv = ["covid", "SARS‑CoV‑2", "corona pandemic", "corona",  "covid 19" , "covid-19"
 #                   , "corona virus", "coronapandemie", "coronakrise", "SARS CoV 2",
 #                   "Wuhan virus", "pandemie", "pandemic", "2019 nCoV", "pandémie",
 #                   "pandemia", "Koronapandemie", "Korona", "Coronavirus",
@@ -293,7 +409,7 @@ df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 
 #
 #             paragraphs = text.split('\n')
 #             covid_paragraphs += [paragraph for paragraph in paragraphs if
-#                                  any(ext.casefold() in paragraph.casefold() for ext in covid_synonyms)]
+#                                  any(ext.casefold() in paragraph.casefold() for ext in keywords.csv)]
 #
 #         res = '\n'.join(covid_paragraphs)
 #         results.append(res)

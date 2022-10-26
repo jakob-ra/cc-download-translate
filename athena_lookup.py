@@ -291,8 +291,6 @@ class Athena_lookup():
 
         self.execute_query(query)
 
-        # self.download_table_location,_ = self.execute_query(query)
-
     def get_length_download_table(self):
         query = f"""select count(*) from cc_merged_to_download"""
 
@@ -307,19 +305,12 @@ class Athena_lookup():
 
         self.n_unique_hosts = pd.read_csv(download_table_n_unique_host_location).values[0][0]
 
-    def save_table_as_csv(self):
-        query = f"""SELECT * FROM cc_merged_to_download"""
-
-        self.download_table_location,_  = self.execute_query(query)
-
-    # def get_length_download_table(self):
-    #     f""" CREATE EXTERNAL TABLE urls_merged_cc_for_download
-    #     LOCATION '{self.download_table_location}' """
-    #     query = f"""select count(*) from urls_merged_cc"""
+    # def save_table_as_csv(self):
+    #     query = f"""SELECT * FROM cc_merged_to_download"""
     #
-    #     location = self.execute_query(query)
-    #
-    #     return location
+    #     self.download_table_location,_  = self.execute_query(query)
+
+
 
     def run_lookup(self):
         self.drop_all_tables()
