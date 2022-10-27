@@ -42,10 +42,11 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--output_bucket", type=str, required=True)
     parser.add_argument("--output_path", type=str, required=True)
-    parser.add_argument("--keywords",type = str, default='keywords.csv')
+    # parser.add_argument("--keywords_path", type=str, default='https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv')
     args = parser.parse_args()
 
-    keywords = pd.read_csv('keywords.csv').squeeze().tolist()
+    keywords = pd.read_csv('https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv').squeeze().tolist()
+    # keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
 
     if "AWS_BATCH_JOB_ARRAY_INDEX" in os.environ:
         batch_n = os.environ['AWS_BATCH_JOB_ARRAY_INDEX']

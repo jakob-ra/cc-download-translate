@@ -41,6 +41,8 @@ url_keywords = ['covid', 'corona', 'coronavirus', 'news', 'press', 'update'] # a
 news_translations = ["الإخبارية", "nieuws", "notizia", "ニュース", "nachrichten", "noticias", "nouvelles", "Новости"]
 url_keywords += news_translations
 
+keywords_path = 'https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv'
+
 # start up session
 session = boto3.Session()
 
@@ -64,14 +66,14 @@ batch_size = 5000
 req_batches = int(athena_lookup.download_table_length//batch_size + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
 
-req_batches = 4
+
 
 ## send commands for AWS batch download
 batch_client = session.client('batch')
 
 attempt_n = 1
 
-batch_env_name = f'cc-download-{attempt_n}'
+batch_env_name = 'cc'
 
 # # compute environment
 # batch_client.create_compute_environment(
@@ -108,13 +110,13 @@ batch_env_name = f'cc-download-{attempt_n}'
 # )
 # time.sleep(20)
 
-FARGATE
+# FARGATE
 batch_client.create_compute_environment(
     computeEnvironmentName=batch_env_name,
     type='MANAGED',
     state='ENABLED',
     computeResources={
-        'type': 'FARGATE',
+        'type': 'FARGATE_SPOT',
         'maxvCpus': req_batches,
         'subnets': [
             'subnet-3fc5e11e',
@@ -128,6 +130,7 @@ batch_client.create_compute_environment(
             'sg-c4a092d8',
         ],
     },
+    # serviceRole='arn:aws:iam::425352751544:role/aws-service-role/batch.amazonaws.com/AWSServiceRoleForBatch',
 )
 
 # job queue
@@ -145,42 +148,6 @@ batch_client.create_job_queue(
 time.sleep(5)
 
 # job definition
-batch_client.register_job_definition(
-    jobDefinitionName=batch_env_name,
-    type='container',
-    containerProperties={
-        'image': 'public.ecr.aws/r9v1u7o6/cc-download:latest',
-        'resourceRequirements': [
-            {
-                'type': 'VCPU',
-                'value': '1',
-            },
-            {
-                'type': 'MEMORY',
-                'value': '2048',
-            },
-        ],
-        'command': [
-            "python",
-            "./cc-download/cc-download.py",
-            f"--batch_size {batch_size}",
-            f"--output_bucket {output_bucket}",
-            f"--output_path {output_path}",
-        ],
-        'jobRoleArn': 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
-    },
-    retryStrategy={
-        'attempts': 1,
-    },
-    timeout={
-        'attemptDurationSeconds': 600
-    },
-    platformCapabilities=[
-        'EC2',
-    ],
-)
-
-# FARGATE
 # batch_client.register_job_definition(
 #     jobDefinitionName=batch_env_name,
 #     type='container',
@@ -189,11 +156,11 @@ batch_client.register_job_definition(
 #         'resourceRequirements': [
 #             {
 #                 'type': 'VCPU',
-#                 'value': '0.25',
+#                 'value': '1',
 #             },
 #             {
 #                 'type': 'MEMORY',
-#                 'value': '512',
+#                 'value': '2048',
 #             },
 #         ],
 #         'command': [
@@ -202,9 +169,9 @@ batch_client.register_job_definition(
 #             f"--batch_size {batch_size}",
 #             f"--output_bucket {output_bucket}",
 #             f"--output_path {output_path}",
+#             f"--keywords {keywords_path}",
 #         ],
-#         # 'jobRoleArn': 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
-#         'executionRoleArn':  'arn:aws:iam::425352751544:role/cc-download', # 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+#         'jobRoleArn': 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
 #     },
 #     retryStrategy={
 #         'attempts': 1,
@@ -213,9 +180,50 @@ batch_client.register_job_definition(
 #         'attemptDurationSeconds': 600
 #     },
 #     platformCapabilities=[
-#         'FARGATE',
+#         'EC2',
 #     ],
 # )
+
+# FARGATE
+batch_client.register_job_definition(
+    jobDefinitionName=batch_env_name,
+    type='container',
+    containerProperties={
+        'image': 'public.ecr.aws/r9v1u7o6/cc-download:latest',
+        'resourceRequirements': [
+            {
+                'type': 'VCPU',
+                'value': '0.25',
+            },
+            {
+                'type': 'MEMORY',
+                'value': '512',
+            },
+        ],
+        'command': [
+            "python3",
+            "./cc-download/cc-download.py",
+            f"--batch_size={batch_size}",
+            f"--output_bucket={output_bucket}",
+            f"--output_path={output_path}",
+            # f"--keywords_path {keywords_path}",
+        ],
+        'jobRoleArn': 'arn:aws:iam::425352751544:role/cc-download', #'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+        'executionRoleArn':  'arn:aws:iam::425352751544:role/cc-download', # 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+        'networkConfiguration': {
+                'assignPublicIp': 'ENABLED',
+        }
+    },
+    retryStrategy={
+        'attempts': 2,
+    },
+    timeout={
+        'attemptDurationSeconds': 1800
+    },
+    platformCapabilities=[
+        'FARGATE',
+    ],
+)
 time.sleep(5)
 
 # submit job
@@ -223,7 +231,7 @@ batch_client.submit_job(
     jobName=batch_env_name,
     jobQueue=batch_env_name,
     arrayProperties={
-        'size': req_batches
+        'size': req_batches,
     },
     jobDefinition=batch_env_name,
     # retryStrategy={
@@ -233,8 +241,6 @@ batch_client.submit_job(
     #     'attemptDurationSeconds': 1800
     # },
 )
-
-
 
 
 
@@ -249,7 +255,7 @@ res = pd.read_csv(athena_lookup.download_table_location)
 
 df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 * batch_size), nrows=batch_size, header=0)
 
-
+pd.read_csv(keywords_path).squeeze().tolist()
 
 
 # get rid of old compute environment
@@ -268,8 +274,8 @@ try:
         computeEnvironment='cc-download'
     )
     time.sleep(2)
-except:
-    pass
+except Exception as e:
+    print(e)
 
 
 

@@ -9,7 +9,7 @@ RUN pip install -r requirements.txt
 COPY cc-download ./cc-download
 
 ## the command is submitted directly to AWS batch as a job definition:
-# python ./cc-download/cc-download.py --output_bucket cc-extract --output_path cc-download-test --batch_size 100 --keywords keywords.csv
+# python ./cc-download/cc-download.py --output_bucket cc-extract --output_path cc-download-test --batch_size 100 --keywords https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv
 
 ## to push the dockerfile to Amazon Elastic Container Registry:
 # start docker daemon
