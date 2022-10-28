@@ -1,3 +1,4 @@
+import botocore.exceptions
 import pandas as pd
 import boto3
 from warcio.archiveiterator import ArchiveIterator
@@ -19,7 +20,23 @@ def fetch_process_warc_records(row, s3client, keywords):
 
     rangereq = 'bytes={}-{}'.format(offset, end)
 
-    response = s3client.get_object(Bucket='commoncrawl', Key=warc_path, Range=rangereq)
+    # response = s3client.get_object(Bucket='commoncrawl', Key=warc_path, Range=rangereq)
+
+    # try-except block to account for request limits
+    delay = 1  # initial delay
+    delay_incr = 1  # additional delay in each loop
+    max_delay = 4  # max delay of one loop. Total delay is (max_delay**2)/2
+
+    while delay < max_delay:
+        try:
+            response = s3client.get_object(Bucket='commoncrawl', Key=warc_path, Range=rangereq)
+            break
+
+        except botocore.exceptions.ClientError:
+            time.sleep(delay)
+            delay += delay_incr
+    else:
+        raise
 
     record_stream = BytesIO(response["Body"].read())
 
