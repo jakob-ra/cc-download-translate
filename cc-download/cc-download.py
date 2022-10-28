@@ -8,8 +8,49 @@ from bs4 import BeautifulSoup, SoupStrainer
 import os
 import argparse
 import awswrangler as wr
+import re
 
-def fetch_process_warc_records(row, s3client, keywords):
+def mergeIntervals(arr):
+    # Sorting based on the increasing order
+    # of the start intervals
+    arr.sort(key=lambda x: x[0])
+
+    # Stores index of last element
+    # in output array (modified arr[])
+    index = 0
+
+    # Traverse all input Intervals starting from
+    # second interval
+    for i in range(1, len(arr)):
+
+        # If this is not first Interval and overlaps
+        # with the previous one, Merge previous and
+        # current Intervals
+        if (arr[index][1] >= arr[i][0]):
+            arr[index][1] = max(arr[index][1], arr[i][1])
+        else:
+            index = index + 1
+            arr[index] = arr[i]
+
+    return arr[:index+1]
+
+def extract_sentences_around_keyword_mention(text: str, keywords: list) -> list:
+    sentence_boundary = '(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|!)\s'
+    sentences = re.split(sentence_boundary, text)
+    intervals = []
+    for index, sentence in enumerate(sentences):
+        for keyword in keywords:
+            if keyword.casefold() in sentence.casefold():
+                keyword_mention_index = index
+                start_index = max(0, keyword_mention_index - 5)
+                end_index = min(len(sentences), keyword_mention_index + 7)
+                intervals.append([start_index, end_index])
+    merged_intervals = mergeIntervals(intervals)
+    relevant_sentences = [' '.join(sentences[start_index:end_index]) for start_index,end_index in merged_intervals]
+
+    return relevant_sentences
+
+def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False):
     """Fetch all WARC records defined by filenames and offsets in batch,
     parse the records and the contained HTML, return all paragraphs containing at least one of the
     keywords.csv"""
@@ -40,7 +81,7 @@ def fetch_process_warc_records(row, s3client, keywords):
 
     record_stream = BytesIO(response["Body"].read())
 
-    covid_paragraphs = []
+    relevant_passages = []
     for record in ArchiveIterator(record_stream):
         page = record.content_stream().read()
 
@@ -49,20 +90,27 @@ def fetch_process_warc_records(row, s3client, keywords):
         text = soup.get_text()
 
         paragraphs = text.split('\n')
-        covid_paragraphs += [paragraph for paragraph in paragraphs if
-                             any(ext.casefold() in paragraph.casefold() for ext in keywords)]
 
-    return list(set(covid_paragraphs))
+        if return_paragraphs == True:
+            relevant_passages += [paragraph for paragraph in paragraphs if
+                                 any(ext.casefold() in paragraph.casefold() for ext in keywords)]
+
+        else:
+            for paragraph in paragraphs:
+                relevant_passages += extract_sentences_around_keyword_mention(paragraph, keywords)
+
+    return list(set(relevant_passages))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--output_bucket", type=str, required=True)
     parser.add_argument("--output_path", type=str, required=True)
-    # parser.add_argument("--keywords_path", type=str, default='https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv')
+    parser.add_argument("--keywords_path", type=str, required=True) # default='https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv')
     args = parser.parse_args()
 
-    keywords = pd.read_csv('https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv').squeeze().tolist()
+    keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
     # keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
 
     if "AWS_BATCH_JOB_ARRAY_INDEX" in os.environ:
@@ -99,7 +147,7 @@ if __name__ == "__main__":
     # df = df[['url_host_name', 'url', 'crawl', 'paragraphs']].explode('paragraphs')
 
     # drop pages without any paragraphs
-    df.dropna(subset=['paragraphs'], inplace=True)
+    df = df[df.paragraphs.str.len() > 0]
 
     # save to S3
     s3_path = f's3://{args.output_bucket}/{args.output_path}/batch_n_{batch_n}.csv'

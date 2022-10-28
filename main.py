@@ -33,7 +33,7 @@ aws_params = {
     'catalog': 'AwsDataCatalog',
     'database': 'ccindex',
     'bucket': output_bucket,
-    'path': output_path
+    'path': index_output_path
 }
 
 n_subpages = 10 # number of subpages to download per domain
@@ -130,6 +130,9 @@ batch_client.create_compute_environment(
             'sg-c4a092d8',
         ],
     },
+    tags={
+        'Project': 'cc-download'
+    },
     # serviceRole='arn:aws:iam::425352751544:role/aws-service-role/batch.amazonaws.com/AWSServiceRoleForBatch',
 )
 
@@ -206,7 +209,7 @@ batch_client.register_job_definition(
             f"--batch_size={batch_size}",
             f"--output_bucket={output_bucket}",
             f"--output_path={output_path}",
-            # f"--keywords_path {keywords_path}",
+            f"--keywords_path={keywords_path}",
         ],
         'jobRoleArn': 'arn:aws:iam::425352751544:role/cc-download', #'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
         'executionRoleArn':  'arn:aws:iam::425352751544:role/cc-download', # 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
@@ -314,10 +317,7 @@ except Exception as e:
 
 
 
-
-
-
-
+df = pd.concat([pd.read_csv(f's3://{output_bucket}/{output_path}/batch_n_{i}.csv') for i in range(req_batches)])
 
 # df = pd.read_csv('/Users/Jakob/Downloads/61df3a7f-7b61-474c-ae91-1a6dd08d2ded.csv')
 #
