@@ -34,7 +34,9 @@ def mergeIntervals(arr):
 
     return arr[:index+1]
 
-def extract_sentences_around_keyword_mention(text: str, keywords: list) -> list:
+
+def extract_sentences_around_keyword_mention(text: str, keywords: list, n_sent_backward: int = 5,
+                                             n_sent_forward: int = 7) -> list:
     sentence_boundary = '(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|!)\s'
     sentences = re.split(sentence_boundary, text)
     intervals = []
@@ -42,11 +44,12 @@ def extract_sentences_around_keyword_mention(text: str, keywords: list) -> list:
         for keyword in keywords:
             if keyword.casefold() in sentence.casefold():
                 keyword_mention_index = index
-                start_index = max(0, keyword_mention_index - 5)
-                end_index = min(len(sentences), keyword_mention_index + 7)
+                start_index = max(0, keyword_mention_index - n_sent_backward)
+                end_index = min(len(sentences), keyword_mention_index + n_sent_forward + 1)
                 intervals.append([start_index, end_index])
     merged_intervals = mergeIntervals(intervals)
-    relevant_sentences = [' '.join(sentences[start_index:end_index]) for start_index,end_index in merged_intervals]
+    relevant_sentences = [' '.join(sentences[start_index:end_index]) for start_index, end_index in
+                          merged_intervals]
 
     return relevant_sentences
 
@@ -63,7 +66,7 @@ def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False)
 
     # response = s3client.get_object(Bucket='commoncrawl', Key=warc_path, Range=rangereq)
 
-    # try-except block to account for request limits
+    ## exponential backoff to deal with request limits
     delay = 1  # initial delay
     delay_incr = 1  # additional delay in each loop
     max_delay = 4  # max delay of one loop. Total delay is (max_delay**2)/2
@@ -72,7 +75,6 @@ def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False)
         try:
             response = s3client.get_object(Bucket='commoncrawl', Key=warc_path, Range=rangereq)
             break
-
         except botocore.exceptions.ClientError:
             time.sleep(delay)
             delay += delay_incr
@@ -94,7 +96,6 @@ def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False)
         if return_paragraphs == True:
             relevant_passages += [paragraph for paragraph in paragraphs if
                                  any(ext.casefold() in paragraph.casefold() for ext in keywords)]
-
         else:
             for paragraph in paragraphs:
                 relevant_passages += extract_sentences_around_keyword_mention(paragraph, keywords)

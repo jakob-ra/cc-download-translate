@@ -19,7 +19,7 @@ aws_config_credentials(credentials_csv_filepath, region, profile_name)
 s3path_url_list = 's3://cc-extract/dataprovider_all_months' # folder where url list is stored, starts with 's3://'
 output_bucket = 'cc-extract' # bucket to store the results
 index_output_path = 'urls_merged_cc' # path in output_bucket to store the index results
-crawls = ['CC-MAIN-2020-16'] # crawl name, for list see https://commoncrawl.org/the-data/get-started/
+crawls = ['CC-MAIN-2020-29', 'CC-MAIN-2020-34'] # crawl name, for list see https://commoncrawl.org/the-data/get-started/
 # available_crawls = pd.read_csv('common-crawls.txt')
 available_crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24', 'CC-MAIN-2020-29', 'CC-MAIN-2020-34',
                     'CC-MAIN-2020-40', 'CC-MAIN-2020-45', 'CC-MAIN-2020-50', 'CC-MAIN-2021-04',
@@ -47,7 +47,7 @@ keywords_path = 'https://github.com/jakob-ra/cc-download/raw/main/cc-download/ke
 session = boto3.Session()
 
 athena_lookup = Athena_lookup(session, aws_params, s3path_url_list, crawls, n_subpages, url_keywords,
-                              limit_cc_table=None, keep_ccindex=False)
+                              limit_cc_table=None, keep_ccindex=True)
 # athena_lookup.drop_all_tables()
 # athena_lookup.create_url_list_table()
 # # athena_lookup.create_ccindex_table()
@@ -70,8 +70,6 @@ print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batch
 
 ## send commands for AWS batch download
 batch_client = session.client('batch')
-
-attempt_n = 1
 
 batch_env_name = 'cc'
 
@@ -218,7 +216,7 @@ batch_client.register_job_definition(
         }
     },
     retryStrategy={
-        'attempts': 2,
+        'attempts': 3,
     },
     timeout={
         'attemptDurationSeconds': 1800
@@ -249,9 +247,15 @@ batch_client.submit_job(
 
 
 # estimate cost
-instance_price_per_hour = 0.0035
-time_for_completion = 0.1 # 6 minutes
-instance_price_per_hour*req_batches*time_for_completion*len(available_crawls)
+compute_time = req_batches * 600 / 3600
+0.01293507*compute_time*0.25 + 0.00142037*compute_time*0.5 # FARGATE SPOT
+0.0004*req_batches*batch_size/1000 # S3 requests
+0.37*len(crawls) # athena lookup cost
+# athena retrieval costs
+
+# instance_price_per_hour = 0.0035
+# time_for_completion = 0.1 # 6 minutes
+# instance_price_per_hour*req_batches*time_for_completion*len(available_crawls)
 
 
 res = pd.read_csv(athena_lookup.download_table_location)
@@ -315,9 +319,11 @@ except Exception as e:
 
 
 
-
+# df = pd.read_csv(f's3://{output_bucket}/{output_path}/batch_n_{0}.csv')
 
 df = pd.concat([pd.read_csv(f's3://{output_bucket}/{output_path}/batch_n_{i}.csv') for i in range(req_batches)])
+
+df.paragraphs.explode()
 
 # df = pd.read_csv('/Users/Jakob/Downloads/61df3a7f-7b61-474c-ae91-1a6dd08d2ded.csv')
 #
