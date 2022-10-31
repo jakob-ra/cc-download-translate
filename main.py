@@ -313,17 +313,82 @@ except Exception as e:
 #             "Уханьский вирус", "ndemie", "пандемия", "2019 нКоВ", "ndemia"]
 # pd.Series(keywords, name='keyword').to_csv('keywords.csv', index=False)
 
-
-
-
-
-
-
-# df = pd.read_csv(f's3://{output_bucket}/{output_path}/batch_n_{0}.csv')
-
 df = pd.concat([pd.read_csv(f's3://{output_bucket}/{output_path}/batch_n_{i}.csv') for i in range(req_batches)])
 
-df.paragraphs.explode()
+df = pd.concat([pd.read_csv(f's3://{output_bucket}/cc-download/CC-MAIN-2020-24/batch_n_{i}.csv') for i in range(req_batches//100)])
+
+# df = pd.read_csv(f's3://{output_bucket}/cc-download/CC-MAIN-2020-16/batch_n_{0}.csv')
+
+from ast import literal_eval
+df['paragraphs'] = df.paragraphs.apply(literal_eval)
+df = df.explode('paragraphs')
+df['paragraphs'] = df.paragraphs.str.strip()
+df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
+
+from langdetect import detect
+def detect_lang(text: str) -> str:
+    try:
+        return detect(text)
+    except:
+        return None
+
+df['lang'] = df.paragraphs.str[:50].apply(detect_lang)
+
+lang_counts = df.lang.value_counts().to_frame(name='count')
+lang_counts['share'] = lang_counts/lang_counts.sum()
+lang_counts['cum_share'] = lang_counts.share.cumsum()
+
+lang_codes = pd.read_csv('/Users/Jakob/Downloads/language-codes.csv', names=['lang', 'language'])
+lang_counts = lang_counts.reset_index(names='lang').merge(lang_codes, on='lang')
+
+import matplotlib.pyplot as plt
+plt.figure(figsize=(10,4))
+lang_counts.cum_share.plot(marker='o')
+plt.xticks(range(len(lang_counts.index)), lang_counts.language, rotation=45)
+plt.grid()
+plt.show()
+
+lang_counts.head(12) # take top 12 languages, 95% of content
+
+
+import urllib.request
+import argostranslate.package
+import argostranslate.translate
+
+
+def download_install_argos_model(from_code, to_code):
+    argos_models = pd.read_json('https://github.com/argosopentech/argospm-index/raw/main/index.json')
+    argos_link = argos_models[(argos_models.from_code == from_code) & (argos_models.to_code == to_code)].iloc[0].links[0]
+    argos_model_name = argos_link.split('/')[-1]
+    urllib.request.urlretrieve(argos_link, argos_model_name)
+    argostranslate.package.install_from_path(argos_model_name)
+
+def load_argos_model(from_code, to_code):
+    installed_languages = argostranslate.translate.get_installed_languages()
+    from_lang = list(filter(lambda x: x.code == from_code, installed_languages))[0]
+    to_lang = list(filter(lambda x: x.code == to_code, installed_languages))[0]
+    model = from_lang.get_translation(to_lang)
+
+    return model
+
+for lang in ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']:
+    from_code = lang
+    to_code = "en"
+    download_install_argos_model(from_code, to_code)
+    
+model = load_argos_model(from_code, to_code)
+translatedText = model.translate("Hallo, wie geht es Ihnen heute?")
+print(translatedText)
+
+
+# Download and install Argos Translate package
+available_packages = argostranslate.package.get_available_packages()
+package_to_install = list(filter(lambda x: x.from_code == from_code and x.to_code == to_code, available_packages))[0]
+argostranslate.package.install_from_path(package_to_install.download())
+
+# Translate
+translatedText = argostranslate.translate.translate("Hello World", from_code, to_code)
+print(translatedText)
 
 # df = pd.read_csv('/Users/Jakob/Downloads/61df3a7f-7b61-474c-ae91-1a6dd08d2ded.csv')
 #

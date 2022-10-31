@@ -9,6 +9,14 @@ import os
 import argparse
 import awswrangler as wr
 import re
+import numpy as np
+from langdetect import detect
+
+def detect_lang(text: str) -> str:
+    try:
+        return detect(text)
+    except:
+        return None
 
 def mergeIntervals(arr):
     # Sorting based on the increasing order
@@ -139,16 +147,33 @@ if __name__ == "__main__":
     s3client = boto3.client('s3', region_name='us-east-1', use_ssl=False)
 
    # download paragraphs and fill into new column
+    print('Starting download...')
     start = time.process_time()
     df['paragraphs'] = df.apply(lambda row: fetch_process_warc_records(row, s3client, keywords), axis=1)
-    print(f'Success! Finished in {time.process_time() - start} seconds.')
+    print(f'Success! Finished downloading in {time.process_time() - start} seconds.')
     print(f'Share of URLs mentioning at least one keyword: {len(df.paragraphs[df.paragraphs.str.len()>0])/len(df)}')
+
+    # drop offsets
+    df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
 
     # explode so we have one paragraph per row
     # df = df[['url_host_name', 'url', 'crawl', 'paragraphs']].explode('paragraphs')
 
     # drop pages without any paragraphs
     df = df[df.paragraphs.str.len() > 0]
+
+    # detect language on first characters of first paragraph
+    print('Starting language detection...')
+    start = time.process_time()
+    df['lang'] = df.paragraphs.str[0].str.strip().str[:50].apply(detect_lang)
+    print(f'Success! Finished language detection in {time.process_time() - start} seconds.')
+
+    # translation
+    print(f'Starting translation of {len(df[df.lang != "en"])} paragraphs...')
+    df['translated_paragraphs'] = np.nan
+    df.loc[df.lang != 'en', 'translated_paragraphs'] = df.loc[df.lang != 'en', 'paragraphs'].apply(translate)
+
+
 
     # save to S3
     s3_path = f's3://{args.output_bucket}/{args.output_path}/batch_n_{batch_n}.csv'
