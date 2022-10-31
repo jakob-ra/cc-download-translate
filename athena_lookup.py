@@ -14,9 +14,9 @@ def convert_size(size_bytes):
    return "%s %s" % (s, size_name[i])
 
 class Athena_lookup():
-    def __init__(self, session, aws_params: dict, s3path_url_list, crawls: list, n_subpages: int, url_keywords: list,
+    def __init__(self, aws_params: dict, s3path_url_list, crawls: list, n_subpages: int, url_keywords: list,
                  athena_price_per_tb=5, wait_seconds=3600, limit_cc_table=10000, keep_ccindex=False):
-        self.athena_client = session.client('athena')
+        self.athena_client = boto3.client('athena')
         self.s3_client = session.client('s3')
         self.aws_params = aws_params
         self.s3path_url_list = s3path_url_list

@@ -11,6 +11,21 @@ import awswrangler as wr
 import re
 import numpy as np
 from langdetect import detect
+import argostranslate.translate
+
+def load_argos_model(from_code, to_code):
+    installed_languages = argostranslate.translate.get_installed_languages()
+    from_lang = list(filter(lambda x: x.code == from_code, installed_languages))[0]
+    to_lang = list(filter(lambda x: x.code == to_code, installed_languages))[0]
+    model = from_lang.get_translation(to_lang)
+
+    return model
+
+def argos_translate(model, text):
+    try:
+        return model.translate(text)
+    except:
+        return None
 
 def detect_lang(text: str) -> str:
     try:
@@ -110,7 +125,6 @@ def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False)
 
     return list(set(relevant_passages))
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, required=True)
@@ -171,9 +185,10 @@ if __name__ == "__main__":
     # translation
     print(f'Starting translation of {len(df[df.lang != "en"])} paragraphs...')
     df['translated_paragraphs'] = np.nan
-    df.loc[df.lang != 'en', 'translated_paragraphs'] = df.loc[df.lang != 'en', 'paragraphs'].apply(translate)
-
-
+    for lang in ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']:
+        model = load_argos_model(from_code, to_code)
+        df.loc[df.lang == lang, 'translated_paragraphs'] = df[df.lang == lang].paragraphs.apply(lambda text: argos_translate(model, text))
+    print(f'Success! Finished translation in {time.process_time() - start} seconds.')
 
     # save to S3
     s3_path = f's3://{args.output_bucket}/{args.output_path}/batch_n_{batch_n}.csv'

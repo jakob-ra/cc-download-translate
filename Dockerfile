@@ -5,6 +5,7 @@ WORKDIR /cc-download
 # Install dependencies:
 COPY requirements.txt .
 RUN pip install -r requirements.txt
+RUN python3 download_install_argos_models.py
 
 COPY cc-download ./cc-download
 

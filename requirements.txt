@@ -8,3 +8,4 @@ lxml
 awswrangler~=2.17.0
 tqdm
 langdetect
+argostranslate
