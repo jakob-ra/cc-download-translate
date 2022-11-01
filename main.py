@@ -29,7 +29,7 @@ aws_params = {
     'bucket': cfg['output_bucket'],
     'path': cfg['index_output_path'],
 }
-url_keywords = pd.read_csv(cfg['url_keywords_path'], header=None).squeeze().tolist()
+url_keywords = pd.read_csv(cfg['url_keywords_path']).squeeze().tolist()
 
 athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'],
                               cfg['n_subpages_per_domain'], url_keywords, limit_cc_table=10000,
