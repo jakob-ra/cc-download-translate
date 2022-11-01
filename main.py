@@ -6,19 +6,14 @@ from aws_config import aws_config_credentials
 from aws_batch import AWSBatch
 import yaml
 
+## read config file
 with open("config.yml", "r", encoding='utf8') as ymlfile:
     cfg = yaml.safe_load(ymlfile)
 
-# first, create IAM user with full access to S3, Athena, Batch, download access key file as csv
-# change ecsTaskExecutionRole to have S3 access cloudwatch
-# also create a role that can be passed to
-# upload url list to S3
-
-# authenticate to AWS
+## authenticate to AWS
 aws_config_credentials(cfg['credentials_csv_filepath'], cfg['region'], cfg['profile_name'])
 
 # available_crawls = pd.read_csv('common-crawls.txt')
-
 
 ## run athena lookup
 result_output_path = cfg['result_output_path'] + '/' + '_'.join(cfg['crawls']) # path in output_bucket to store the downloads in batches
