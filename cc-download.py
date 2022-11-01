@@ -102,7 +102,8 @@ if __name__ == "__main__":
     start = time.process_time()
     df['paragraphs'] = df.apply(lambda row: fetch_process_warc_records(row, s3client, keywords), axis=1)
     print(f'Success! Finished downloading in {time.process_time() - start} seconds.')
-    print(f'Share of URLs mentioning at least one keyword: {len(df.paragraphs[df.paragraphs.str.len()>0])/len(df)}')
+    print(f'Share of domains mentioning at least one keyword: {df.groupby("url_host_registered_domain").paragraphs.apply(lambda x: len(x[x.str.len()>0])).mean()}')
+    print(f'Share of subpages mentioning at least one keyword: {len(df.paragraphs[df.paragraphs.str.len()>0])/len(df)}')
 
     # drop offsets
     df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
@@ -114,18 +115,18 @@ if __name__ == "__main__":
     df = df[df.paragraphs.str.len() > 0].copy(deep=True)
 
     # detect language on first characters of first paragraph
-    print('Starting language detection...')
-    start = time.process_time()
-    df['lang'] = df.paragraphs.str[0].str.strip().str[:50].apply(detect_lang)
-    print(f'Success! Finished language detection in {time.process_time() - start} seconds.')
+    # print('Starting language detection...')
+    # start = time.process_time()
+    # df['lang'] = df.paragraphs.str[0].str.strip().str[:50].apply(detect_lang)
+    # print(f'Success! Finished language detection in {time.process_time() - start} seconds.')
 
     # translation
-    print(f'Starting translation of {len(df[df.lang != "en"])} paragraphs...')
-    df['translated_paragraphs'] = np.nan
-    for lang in ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']:
-        model = load_argos_model(lang, 'en')
-        df.loc[df.lang == lang, 'translated_paragraphs'] = df[df.lang == lang].paragraphs.apply(lambda paragraphs: [argos_translate(model, text) for text in paragraphs])
-    print(f'Success! Finished translation in {time.process_time() - start} seconds.')
+    # print(f'Starting translation of {len(df[df.lang != "en"])} paragraphs...')
+    # df['translated_paragraphs'] = np.nan
+    # for lang in ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']:
+    #     model = load_argos_model(lang, 'en')
+    #     df.loc[df.lang == lang, 'translated_paragraphs'] = df[df.lang == lang].paragraphs.apply(lambda paragraphs: [argos_translate(model, text) for text in paragraphs])
+    # print(f'Success! Finished translation in {time.process_time() - start} seconds.')
 
     # save to S3
     s3_path = f's3://{args.output_bucket}/{args.result_output_path}/batch_n_{batch_n}.csv'
