@@ -146,13 +146,11 @@ class Athena_lookup():
     def create_url_list_table(self):
         # to-do: make unspecific to bvdid
         query = f"""CREATE EXTERNAL TABLE IF NOT EXISTS url_list (
-        websiteaddress               STRING, 
-        bvdidnumber                  STRING)
+        websiteaddress               STRING)
         ROW FORMAT DELIMITED
         FIELDS TERMINATED BY ','
         LINES TERMINATED BY '\n'
         LOCATION '{self.s3path_url_list}'
-        TBLPROPERTIES ('skip.header.line.count' = '1')
         ;"""
         self.execute_query(query)
 

@@ -4,69 +4,52 @@ import os
 import s3fs
 from aws_config import aws_config_credentials
 from aws_batch import AWSBatch
+import yaml
+
+with open("config.yml", "r", encoding='utf8') as ymlfile:
+    cfg = yaml.safe_load(ymlfile)
 
 # first, create IAM user with full access to S3, Athena, Batch, download access key file as csv
 # change ecsTaskExecutionRole to have S3 access cloudwatch
 # also create a role that can be passed to
+# upload url list to S3
 
-region = 'us-east-1'
-profile_name = 'default'
-credentials_csv_filepath = 'C:/Users/Jakob/Downloads/jakob-s3-ec2-athena_accessKeys.csv'
-aws_config_credentials(credentials_csv_filepath, region, profile_name)
+# authenticate to AWS
+aws_config_credentials(cfg['credentials_csv_filepath'], cfg['region'], cfg['profile_name'])
 
-# params
-s3path_url_list = 's3://cc-extract/dataprovider_all_months' # folder where url list is stored, starts with 's3://'
-output_bucket = 'cc-extract' # bucket to store the results
-index_output_path = 'urls_merged_cc' # path in output_bucket to store the index results
-crawls = ['CC-MAIN-2020-29', 'CC-MAIN-2020-34'] # crawl name, for list see https://commoncrawl.org/the-data/get-started/
 # available_crawls = pd.read_csv('common-crawls.txt')
-available_crawls = ['CC-MAIN-2020-16', 'CC-MAIN-2020-24', 'CC-MAIN-2020-29', 'CC-MAIN-2020-34',
-                    'CC-MAIN-2020-40', 'CC-MAIN-2020-45', 'CC-MAIN-2020-50', 'CC-MAIN-2021-04',
-                    'CC-MAIN-2021-10', 'CC-MAIN-2021-17', 'CC-MAIN-2021-21', 'CC-MAIN-2021-25',
-                    'CC-MAIN-2021-31', 'CC-MAIN-2021-39', 'CC-MAIN-2021-43', 'CC-MAIN-2021-49',
-                    'CC-MAIN-2022-05', 'CC-MAIN-2022-21', 'CC-MAIN-2022-27', 'CC-MAIN-2022-33']
-output_path = 'cc-download/' + '_'.join(crawls) # path in output_bucket to store the downloads in batches
 
+
+# run athena lookup
+result_output_path = cfg['result_output_path'] + '/' + '_'.join(crawls) # path in output_bucket to store the downloads in batches
 aws_params = {
-    'region': region,
+    'region': cfg['region'],
     'catalog': 'AwsDataCatalog',
     'database': 'ccindex',
-    'bucket': output_bucket,
-    'path': index_output_path
+    'bucket': cfg['output_bucket'],
+    'path': cfg['index_output_path'],
 }
+url_keywords = pd.read_csv(cfg['url_keywords_path']).tolist()
 
-n_subpages = 10 # number of subpages to download per domain
-url_keywords = ['covid', 'corona', 'coronavirus', 'news', 'press', 'update'] # additionaly include subpages with these keywords.csv in the url
-news_translations = ["الإخبارية", "nieuws", "notizia", "ニュース", "nachrichten", "noticias", "nouvelles", "Новости"]
-url_keywords += news_translations
-
-keywords_path = 'https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv'
-
-batch_size = 5000
-
-
-athena_lookup = Athena_lookup(aws_params, s3path_url_list, crawls, n_subpages, url_keywords,
-                              limit_cc_table=None, keep_ccindex=True)
+athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'], cfg['n_subpages_per_domain'],
+                              url_keywords, limit_cc_table=None, keep_ccindex=True)
 athena_lookup.run_lookup()
 
+
+# run batch job
 req_batches = int(athena_lookup.download_table_length//batch_size + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
 
-aws_batch = AWSBatch(2, 500, output_bucket, output_path, keywords_path, retry_attempts=1)
+aws_batch = AWSBatch(2, 500, output_bucket, result_output_path, keywords_path, retry_attempts=1)
 aws_batch.register_job_definition()
 aws_batch.submit_job()
 aws_batch.run()
 
 
+
+
+
 df = pd.read_csv('s3://cc-extract/cc-download-test/batch_n_0.csv')
-
-
-
-
-
-
-
-
 
 
 
@@ -97,7 +80,7 @@ df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 
 
 
 ## read results
-df = pd.concat([pd.read_csv(f's3://{output_bucket}/{output_path}/batch_n_{i}.csv') for i in range(req_batches)])
+df = pd.concat([pd.read_csv(f's3://{output_bucket}/{result_output_path}/batch_n_{i}.csv') for i in range(req_batches)])
 
 df = pd.concat([pd.read_csv(f's3://{output_bucket}/cc-download/CC-MAIN-2020-24/batch_n_{i}.csv') for i in range(40)])
 
