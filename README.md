@@ -1,8 +1,16 @@
-# aws_test
+# CommonCrawl Downloader
+
+**Purpose**
+[CommonCrawl](https://link-url-here.org](https://commoncrawl.org/the-data/get-started/) is a nonprofit organization that crawls the web and freely provides its archives and datasets to the public. The Common Crawl corpus contains petabytes of data collected since 2013. It contains monthly updates of raw web page data, extracted metadata and text extractions that are hosted on Amazon Web Services' (AWS) S3 storage servers located in the US-East-1 (Northern Virginia) AWS Region.
+
+This script was written with the purpose of downloading and processing the raw web page data for a user-provided list of domain names (e.g. apple.com, walmart.com, microsoft.com). The raw html of a webpage is downloaded and parsed into clear text. Then all passages around mentions of a user-provided list of keywords are extracted.
+
+All input files should be csv. 
+
+Fargate spot cheap, transfer speed maximal because we access the CommonCrawl data from the same region where it is hosted.
 
 
 ## **athena_lookup.py**: 
-**Purpose**
 
 This file takes a list of website addresses as its input and crawls the urls for the selected timeframe from common crawl. Then it outputs the address of subpages that contain specific keywords and the n shortest urls for each website address, where the specific keywords and n are determined by user.   
 
@@ -14,7 +22,7 @@ This file takes a list of website addresses as its input and crawls the urls for
 **Parameters** </font> 
 * n_subpages: number of shortest subpages that are selected for each website address in the output table. 
 * url_keywords: list of keywords that if any of them exists in a url address, that url is selected in the output table. 
-* crawl: this parameter determines the desired timeframe. Once the desired time period for the analysis is determined, using [this website](https://skeptric.com/common-crawl-time-ranges/), one can find the common crawl time ranges. By putting together these time ranges in the following format, this parameter is constructed: (... OR crawl = 'CC-MAIN-2020-24' OR crawl = 'CC-MAIN-2020-50')
+* crawl: this parameter determines the desired timeframe. CRAWL-NAME-YYYY-WW – The name of the crawl and year + week it was initiated. (... OR crawl = 'CC-MAIN-2020-24' OR crawl = 'CC-MAIN-2020-50')
  
 
 **Code explanation**
