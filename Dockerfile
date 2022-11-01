@@ -1,19 +1,16 @@
 FROM python:3.10.7
 
+RUN git clone https://github.com/jakob-ra/cc-download
+
 WORKDIR /cc-download
 
-
-# Install dependencies:
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-RUN git clone RUN git clone git://github.com/jakob-ra/cc-download
+RUN pip install --no-cache-dir -r requirements.txt
 
 # download and install argos models
 #COPY download_install_argos_models.py .
 #RUN python3 download_install_argos_models.py
 
-COPY cc-download ./cc-download
+#COPY cc-download ./cc-download
 
 ## the command is submitted directly to AWS batch as a job definition:
 # python cc-download.py --batch_size=100 --output_bucket=cc-extract --result_output_path=cc-download-test --keywords='https://github.com/jakob-ra/cc-download/raw/main/keywords.csv'

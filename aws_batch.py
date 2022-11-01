@@ -3,7 +3,8 @@ import time
 
 class AWSBatch:
     def __init__(self, n_batches, batch_size, output_bucket, output_path, keywords_path, image_name,
-                 aws_role, retry_attempts=3, keep_compute_env=False, keep_job_queue=False):
+                 aws_role, retry_attempts=3, keep_compute_env=False, keep_job_queue=False,
+                 attempt_duration=1800):
         self.n_batches = n_batches
         self.batch_size = batch_size
         self.output_bucket = output_bucket
@@ -16,6 +17,7 @@ class AWSBatch:
         self.image_name = image_name
         self.keep_compute_env = keep_compute_env
         self.keep_job_queue = keep_job_queue
+        self.attempt_duration = attempt_duration
 
     def create_compute_environment_fargate(self):
         self.batch_client.create_compute_environment(
@@ -76,7 +78,7 @@ class AWSBatch:
                 ],
                 'command': [
                     "python3",
-                    "./cc-download/cc-download.py",
+                    "cc-download.py",
                     f"--batch_size={self.batch_size}",
                     f"--output_bucket={self.output_bucket}",
                     f"--output_path={self.output_path}",
@@ -92,7 +94,7 @@ class AWSBatch:
                 'attempts': self.retry_attempts,
             },
             timeout={
-                'attemptDurationSeconds': 1800
+                'attemptDurationSeconds': self.attempt_duration
             },
             platformCapabilities=[
                 'FARGATE',
