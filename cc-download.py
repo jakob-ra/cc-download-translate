@@ -8,30 +8,31 @@ import os
 import argparse
 import awswrangler as wr
 import numpy as np
-from langdetect import detect
-import argostranslate.translate
-from passage_extraction import PassageExtractor
 from utils import exponential_backoff
+from passage_extraction import PassageExtractor
 
-def load_argos_model(from_code, to_code):
-    installed_languages = argostranslate.translate.get_installed_languages()
-    from_lang = list(filter(lambda x: x.code == from_code, installed_languages))[0]
-    to_lang = list(filter(lambda x: x.code == to_code, installed_languages))[0]
-    model = from_lang.get_translation(to_lang)
-
-    return model
-
-def argos_translate(model, text):
-    try:
-        return model.translate(text)
-    except:
-        return None
-
-def detect_lang(text: str) -> str:
-    try:
-        return detect(text)
-    except:
-        return None
+# from langdetect import detect
+# import argostranslate.translate
+#
+# def load_argos_model(from_code, to_code):
+#     installed_languages = argostranslate.translate.get_installed_languages()
+#     from_lang = list(filter(lambda x: x.code == from_code, installed_languages))[0]
+#     to_lang = list(filter(lambda x: x.code == to_code, installed_languages))[0]
+#     model = from_lang.get_translation(to_lang)
+#
+#     return model
+#
+# def argos_translate(model, text):
+#     try:
+#         return model.translate(text)
+#     except:
+#         return None
+#
+# def detect_lang(text: str) -> str:
+#     try:
+#         return detect(text)
+#     except:
+#         return None
 
 def fetch_process_warc_records(row, s3client, keywords):
     """Fetch all WARC records defined by filenames and offsets in batch,
