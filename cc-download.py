@@ -1,4 +1,3 @@
-import botocore.exceptions
 import pandas as pd
 import boto3
 from warcio.archiveiterator import ArchiveIterator
@@ -8,10 +7,11 @@ from bs4 import BeautifulSoup, SoupStrainer
 import os
 import argparse
 import awswrangler as wr
-import re
 import numpy as np
 from langdetect import detect
 import argostranslate.translate
+from passage_extraction import PassageExtractor
+from utils import exponential_backoff
 
 def load_argos_model(from_code, to_code):
     installed_languages = argostranslate.translate.get_installed_languages()
@@ -33,53 +33,7 @@ def detect_lang(text: str) -> str:
     except:
         return None
 
-def mergeIntervals(arr):
-    # Sorting based on the increasing order
-    # of the start intervals
-    arr.sort(key=lambda x: x[0])
-
-    # Stores index of last element
-    # in output array (modified arr[])
-    index = 0
-
-    # Traverse all input Intervals starting from
-    # second interval
-    for i in range(1, len(arr)):
-
-        # If this is not first Interval and overlaps
-        # with the previous one, Merge previous and
-        # current Intervals
-        if (arr[index][1] >= arr[i][0]):
-            arr[index][1] = max(arr[index][1], arr[i][1])
-        else:
-            index = index + 1
-            arr[index] = arr[i]
-
-    return arr[:index+1]
-
-
-def extract_sentences_around_keyword_mention(text: str, keywords: list, n_sent_backward: int = 2,
-                                             n_sent_forward: int = 4, char_limit: int = 3000) -> list:
-    sentence_boundary = '(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|!)\s'
-    sentences = re.split(sentence_boundary, text)
-    intervals = []
-    for index, sentence in enumerate(sentences):
-        for keyword in keywords:
-            if keyword.casefold() in sentence.casefold():
-                keyword_mention_index = index
-                start_index = max(0, keyword_mention_index - n_sent_backward)
-                end_index = min(len(sentences), keyword_mention_index + n_sent_forward + 1)
-                intervals.append([start_index, end_index])
-    merged_intervals = mergeIntervals(intervals)
-    relevant_passages = [' '.join(sentences[start_index:end_index]) for start_index, end_index in
-                          merged_intervals]
-
-    # enforce character limit
-    relevant_passages = [passage for passage in relevant_passages if len(passage) < char_limit]
-
-    return relevant_passages
-
-def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False):
+def fetch_process_warc_records(row, s3client, keywords):
     """Fetch all WARC records defined by filenames and offsets in batch,
     parse the records and the contained HTML, return all paragraphs containing at least one of the
     keywords.csv"""
@@ -90,26 +44,11 @@ def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False)
 
     rangereq = 'bytes={}-{}'.format(offset, end)
 
-    # response = s3client.get_object(Bucket='commoncrawl', Key=warc_path, Range=rangereq)
-
-    ## exponential backoff to deal with request limits
-    delay = 1  # initial delay
-    delay_incr = 1  # additional delay in each loop
-    max_delay = 4  # max delay of one loop. Total delay is (max_delay**2)/2
-
-    while delay < max_delay:
-        try:
-            response = s3client.get_object(Bucket='commoncrawl', Key=warc_path, Range=rangereq)
-            break
-        except botocore.exceptions.ClientError:
-            time.sleep(delay)
-            delay += delay_incr
-    else:
-        raise
+    response = exponential_backoff(s3client.get_object, Bucket='commoncrawl', Key=warc_path, Range=rangereq)
 
     record_stream = BytesIO(response["Body"].read())
 
-    relevant_passages = []
+    extracts = []
     for record in ArchiveIterator(record_stream):
         page = record.content_stream().read()
 
@@ -117,16 +56,11 @@ def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False)
 
         text = soup.get_text()
 
-        paragraphs = text.split('\n')
+        extractor = PassageExtractor(text, keywords)
+        extracts += extractor.extract_relevant_passages()
 
-        if return_paragraphs == True:
-            relevant_passages += [paragraph for paragraph in paragraphs if
-                                 any(ext.casefold() in paragraph.casefold() for ext in keywords)]
-        else:
-            for paragraph in paragraphs:
-                relevant_passages += extract_sentences_around_keyword_mention(paragraph, keywords)
+    return extracts
 
-    return list(set(relevant_passages))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -137,7 +71,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
-    # keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
 
     if "AWS_BATCH_JOB_ARRAY_INDEX" in os.environ:
         batch_n = os.environ['AWS_BATCH_JOB_ARRAY_INDEX']

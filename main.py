@@ -20,7 +20,7 @@ aws_config_credentials(cfg['credentials_csv_filepath'], cfg['region'], cfg['prof
 # available_crawls = pd.read_csv('common-crawls.txt')
 
 
-# run athena lookup
+## run athena lookup
 result_output_path = cfg['result_output_path'] + '/' + '_'.join(crawls) # path in output_bucket to store the downloads in batches
 aws_params = {
     'region': cfg['region'],
@@ -35,8 +35,7 @@ athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'],
                               url_keywords, limit_cc_table=None, keep_ccindex=True)
 athena_lookup.run_lookup()
 
-
-# run batch job
+## run batch job
 req_batches = int(athena_lookup.download_table_length//batch_size + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
 
