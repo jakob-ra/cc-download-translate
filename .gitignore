@@ -150,3 +150,14 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
+/translate-es_en-1_0.argosmodel
+/translate-fr_en-1_0.argosmodel
+/translate-id_en-1_2.argosmodel
+/translate-it_en-1_0.argosmodel
+/translate-ja_en-1_1.argosmodel
+/translate-nl_en-1_4.argosmodel
+/translate-pl_en-1_1.argosmodel
+/translate-pt_en-1_0.argosmodel
+/translate-ru_en-1_0.argosmodel
+/translate-sv_en-1_5.argosmodel
+/translate-de_en-1_0.argosmodel

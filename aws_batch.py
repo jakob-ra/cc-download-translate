@@ -1,17 +1,19 @@
 import boto3
+import time
 
-class AWSBatch(n_batches, batch_size, output_bucket, output_path, keywords_path):
-    def __init__(self):
+class AWSBatch:
+    def __init__(self, n_batches, batch_size, output_bucket, output_path, keywords_path, retry_attempts=3):
         self.n_batches = n_batches
         self.batch_size = batch_size
         self.output_bucket = output_bucket
         self.output_path = output_path
         self.keywords_path = keywords_path
+        self.retry_attempts = retry_attempts
         self.batch_client = boto3.client('batch')
         self.batch_env_name = 'cc'
 
     def create_compute_environment_fargate(self):
-        batch_client.create_compute_environment(
+        self.batch_client.create_compute_environment(
         computeEnvironmentName=self.batch_env_name,
         type='MANAGED',
         state='ENABLED',
@@ -38,7 +40,7 @@ class AWSBatch(n_batches, batch_size, output_bucket, output_path, keywords_path)
         time.sleep(5)
 
     def create_job_queue(self):
-        batch_client.create_job_queue(
+        self.batch_client.create_job_queue(
             jobQueueName=self.batch_env_name,
             state='ENABLED',
             priority=1,
@@ -52,11 +54,11 @@ class AWSBatch(n_batches, batch_size, output_bucket, output_path, keywords_path)
         time.sleep(5)
 
     def register_job_definition(self):
-        batch_client.register_job_definition(
+        self.batch_client.register_job_definition(
             jobDefinitionName=self.batch_env_name,
             type='container',
             containerProperties={
-                'image': 'public.ecr.aws/r9v1u7o6/cc-download:latest',
+                'image': 'public.ecr.aws/r9v1u7o6/cc-download-translate:latest',
                 'resourceRequirements': [
                     {
                         'type': 'VCPU',
@@ -82,7 +84,7 @@ class AWSBatch(n_batches, batch_size, output_bucket, output_path, keywords_path)
                 }
             },
             retryStrategy={
-                'attempts': 3,
+                'attempts': self.retry_attempts,
             },
             timeout={
                 'attemptDurationSeconds': 1800
@@ -94,19 +96,13 @@ class AWSBatch(n_batches, batch_size, output_bucket, output_path, keywords_path)
         time.sleep(5)
 
     def submit_job(self):
-        batch_client.submit_job(
+        self.batch_client.submit_job(
             jobName=self.batch_env_name,
             jobQueue=self.batch_env_name,
             arrayProperties={
                 'size': self.n_batches,
             },
-            jobDefinition=batch_env_name,
-            retryStrategy={
-                'attempts': 3,
-            },
-            timeout={
-                'attemptDurationSeconds': 1800
-            },
+            jobDefinition=self.batch_env_name,
         )
         time.sleep(5)
 

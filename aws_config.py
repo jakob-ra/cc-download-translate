@@ -3,7 +3,7 @@ import os
 
 ## Credentials
 # make IAM role with AWSBatchFullAccess, AmazonEC2FullAccess, AmazonAthenaFullAccess, AmazonS3FullAccess, AmazonElasticContainerRegistryPublicFullAccess
-def aws_config_credentials(credentials_csv_filepath, region, profile_name):
+def aws_config_credentials(credentials_csv_filepath, region, profile_name='default'):
     os.path.split(credentials_csv_filepath)
     credentials = pd.read_csv(credentials_csv_filepath)
     # user_name = os.path.split(credentials_csv_filepath)[-1].split('_accessKeys')[0] # do not rename credentials csv downloaded from IAM as the user name is inferred from the filename

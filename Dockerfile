@@ -5,7 +5,10 @@ WORKDIR /cc-download
 # Install dependencies:
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-RUN python3 download_install_argos_models.py
+
+# download and install argos models
+COPY download_install_argos_models.py .
+#RUN python3 download_install_argos_models.py
 
 COPY cc-download ./cc-download
 
@@ -16,5 +19,7 @@ COPY cc-download ./cc-download
 # start docker daemon
 # docker build -t cc-download .
 # docker tag cc-download:latest public.ecr.aws/r9v1u7o6/cc-download:latest
+# docker tag cc-download:latest public.ecr.aws/r9v1u7o6/cc-download-translate:latest
 # aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 # docker push public.ecr.aws/r9v1u7o6/cc-download:latest
+# docker push public.ecr.aws/r9v1u7o6/cc-download-translate:latest

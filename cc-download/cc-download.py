@@ -58,8 +58,8 @@ def mergeIntervals(arr):
     return arr[:index+1]
 
 
-def extract_sentences_around_keyword_mention(text: str, keywords: list, n_sent_backward: int = 5,
-                                             n_sent_forward: int = 7) -> list:
+def extract_sentences_around_keyword_mention(text: str, keywords: list, n_sent_backward: int = 2,
+                                             n_sent_forward: int = 4, char_limit: int = 3000) -> list:
     sentence_boundary = '(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|!)\s'
     sentences = re.split(sentence_boundary, text)
     intervals = []
@@ -71,10 +71,13 @@ def extract_sentences_around_keyword_mention(text: str, keywords: list, n_sent_b
                 end_index = min(len(sentences), keyword_mention_index + n_sent_forward + 1)
                 intervals.append([start_index, end_index])
     merged_intervals = mergeIntervals(intervals)
-    relevant_sentences = [' '.join(sentences[start_index:end_index]) for start_index, end_index in
+    relevant_passages = [' '.join(sentences[start_index:end_index]) for start_index, end_index in
                           merged_intervals]
 
-    return relevant_sentences
+    # enforce character limit
+    relevant_passages = [passage for passage in relevant_passages if len(passage) < char_limit]
+
+    return relevant_passages
 
 def fetch_process_warc_records(row, s3client, keywords, return_paragraphs=False):
     """Fetch all WARC records defined by filenames and offsets in batch,
@@ -174,7 +177,7 @@ if __name__ == "__main__":
     # df = df[['url_host_name', 'url', 'crawl', 'paragraphs']].explode('paragraphs')
 
     # drop pages without any paragraphs
-    df = df[df.paragraphs.str.len() > 0]
+    df = df[df.paragraphs.str.len() > 0].copy(deep=True)
 
     # detect language on first characters of first paragraph
     print('Starting language detection...')
@@ -186,8 +189,8 @@ if __name__ == "__main__":
     print(f'Starting translation of {len(df[df.lang != "en"])} paragraphs...')
     df['translated_paragraphs'] = np.nan
     for lang in ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']:
-        model = load_argos_model(from_code, to_code)
-        df.loc[df.lang == lang, 'translated_paragraphs'] = df[df.lang == lang].paragraphs.apply(lambda text: argos_translate(model, text))
+        model = load_argos_model(lang, 'en')
+        df.loc[df.lang == lang, 'translated_paragraphs'] = df[df.lang == lang].paragraphs.apply(lambda paragraphs: [argos_translate(model, text) for text in paragraphs])
     print(f'Success! Finished translation in {time.process_time() - start} seconds.')
 
     # save to S3

@@ -4,7 +4,6 @@ import os
 import s3fs
 from aws_config import aws_config_credentials
 from aws_batch import AWSBatch
-import time
 
 # first, create IAM user with full access to S3, Athena, Batch, download access key file as csv
 # change ecsTaskExecutionRole to have S3 access cloudwatch
@@ -53,8 +52,21 @@ athena_lookup.run_lookup()
 req_batches = int(athena_lookup.download_table_length//batch_size + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
 
-aws_batch = AWSBatch(req_batches, batch_size, output_bucket, output_path, keywords_path)
+aws_batch = AWSBatch(2, 500, output_bucket, output_path, keywords_path, retry_attempts=1)
+aws_batch.register_job_definition()
+aws_batch.submit_job()
 aws_batch.run()
+
+
+df = pd.read_csv('s3://cc-extract/cc-download-test/batch_n_0.csv')
+
+
+
+
+
+
+
+
 
 
 
