@@ -71,11 +71,13 @@ class PassageExtractor:
         return relevant_passages
 
     def extract_relevant_passages(self) -> list:
+        relevant_passages = []
+
         if self.return_paragraphs == True:
             paragraphs = self.text.split('\n')
-            relevant_passages += [paragraph for paragraph in paragraphs if any(
-                    keyword.casefold() in paragraph.casefold() for keyword in self.keywords)]
+            relevant_passages += [paragraph for paragraph in paragraphs if any(keyword.casefold()
+                                      in paragraph.casefold() for keyword in self.keywords)]
         else:
-            relevant_passages += extract_sentences_around_keyword_mention(self.text, self.keywords)
+            relevant_passages += self.extract_sentences_around_keyword_mention()
 
         return list(set(relevant_passages))  # remove duplicates

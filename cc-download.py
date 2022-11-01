@@ -127,7 +127,7 @@ if __name__ == "__main__":
     print(f'Success! Finished translation in {time.process_time() - start} seconds.')
 
     # save to S3
-    s3_path = f's3://{args.output_bucket}/{args.output_path}/batch_n_{batch_n}.csv'
+    s3_path = f's3://{args.output_bucket}/{args.result_output_path}/batch_n_{batch_n}.csv'
     df.to_csv(s3_path, index=False)
     print(f'Results saved to: {s3_path}')
 
