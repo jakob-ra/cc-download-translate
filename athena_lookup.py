@@ -1,21 +1,13 @@
 import time
 import pandas as pd
 import sys
-import math
 import s3fs
-
-def convert_size(size_bytes):
-   if size_bytes == 0:
-       return "0B"
-   size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-   i = int(math.floor(math.log(size_bytes, 1024)))
-   p = math.pow(1024, i)
-   s = round(size_bytes / p, 2)
-   return "%s %s" % (s, size_name[i])
+from utils import convert_file_size
 
 class Athena_lookup():
     def __init__(self, aws_params: dict, s3path_url_list, crawls: list, n_subpages: int, url_keywords: list,
-                 athena_price_per_tb=5, wait_seconds=3600, limit_cc_table=10000, keep_ccindex=False):
+                 athena_price_per_tb=5, wait_seconds=3600, limit_cc_table=10000, keep_ccindex=False,
+                 limit_pages_url_keywords=100):
         self.athena_client = boto3.client('athena')
         self.s3_client = session.client('s3')
         self.aws_params = aws_params
@@ -29,7 +21,7 @@ class Athena_lookup():
         self.total_cost = 0
         self.ccindex_table_name = 'ccindex'
         self.keep_ccindex = keep_ccindex
-        self.limit_pages_url_keywords = 100
+        self.limit_pages_url_keywords = limit_pages_url_keywords
 
 
     @staticmethod
@@ -85,7 +77,7 @@ class Athena_lookup():
                     try:
                         output_size = self.s3_client.head_object(Bucket=params['bucket'],
                                             Key=location.split(params['bucket'] +'/')[1])['ContentLength']
-                        print(f'Query successful! Results are available at {location}. Total size: {convert_size(output_size)}')
+                        print(f'Query successful! Results are available at {location}. Total size: {convert_file_size(output_size)}')
                     except:
                         print(f'Query successful! Results are available at {location}.')
 
@@ -114,7 +106,8 @@ class Athena_lookup():
 
                 else:
                     print(
-                        f'Time elapsed: {execution_time / 1000}s. Data scanned: {convert_size(data_scanned)}. Total cost: {self.total_cost+cost:.2f}$.',
+                        f'Time elapsed: {execution_time / 1000}s. Data scanned: '
+                        f'{convert_file_size(data_scanned)}. Total cost: {self.total_cost + cost:.2f}$.',
                         end='\r')
                     time.sleep(1)
 
@@ -255,37 +248,49 @@ class Athena_lookup():
         self.execute_query(query)
 
     def select_subpages(self):
-        query = f"""create table cc_merged_to_download as select url,
-                    url_host_name,
-                    url_host_registered_domain,
-                    warc_filename,
-                    warc_record_offset,
-                    warc_record_end,
-                    crawl
-                    from (
-                        select url,
-                        url_host_name,
-                        url_host_registered_domain,
-                        warc_filename,
-                        warc_record_offset,
-                        warc_record_end,
-                        crawl,
-                        row_number() over (partition by url_host_name order by length(url) asc) as subpage_rank 
-                        from urls_merged_cc) ranks
-                    where subpage_rank <= {self.n_subpages}
-                    
-                    UNION
-            
-                    (SELECT url,
+        # shortest subpages
+        if self.n_subpages:
+            shortest_subpages_query = f"""(
+                            select url,
                             url_host_name,
                             url_host_registered_domain,
                             warc_filename,
                             warc_record_offset,
                             warc_record_end,
-                            crawl
-                            FROM urls_merged_cc
-                    WHERE """ + ' OR '.join([f"url LIKE '%{keyword}%'" for keyword in self.url_keywords])\
-                    + f'LIMIT {self.limit_pages_url_keywords})'
+                            crawl,
+                            row_number() over (partition by url_host_name order by length(url) asc) as subpage_rank 
+                            from urls_merged_cc) ranks
+                        where subpage_rank <= {self.n_subpages}"""
+
+        # subpages with URLs containing keywords
+        if self.url_keywords:
+            keyword_subpages_query = f"""(SELECT url,
+                                url_host_name,
+                                url_host_registered_domain,
+                                warc_filename,
+                                warc_record_offset,
+                                warc_record_end,
+                                crawl
+                                FROM urls_merged_cc
+                        WHERE """ + ' OR '.join([f"url LIKE '%{keyword}%'" for keyword in self.url_keywords])
+            if self.limit_pages_url_keywords:
+                keyword_subpages_query +=  f'LIMIT {self.limit_pages_url_keywords})'
+            else:
+                keyword_subpages_query += ')'
+
+        # form query
+        if self.n_subpages and self.url_keywords:
+            query = f"""CREATE TABLE urls_merged_cc_subpages AS
+            SELECT * FROM {shortest_subpages_query} UNION {keyword_subpages_query}"""
+        elif self.n_subpages:
+            query = f"""CREATE TABLE urls_merged_cc_subpages AS
+            SELECT * FROM {shortest_subpages_query}"""
+        elif self.url_keywords:
+            query = f"""CREATE TABLE urls_merged_cc_subpages AS
+            SELECT * FROM {keyword_subpages_query}"""
+        else:
+            query = f"""CREATE TABLE urls_merged_cc_subpages AS
+            SELECT * FROM urls_merged_cc"""
 
         self.execute_query(query)
 
@@ -302,6 +307,7 @@ class Athena_lookup():
         download_table_n_unique_host_location, _ = self.execute_query(query)
 
         self.n_unique_hosts = pd.read_csv(download_table_n_unique_host_location).values[0][0]
+
 
     # def save_table_as_csv(self):
     #     query = f"""SELECT * FROM cc_merged_to_download"""
@@ -344,3 +350,35 @@ class Athena_lookup():
 # )
 #
 # results = client.get_query_results(QueryExecutionId=res)
+
+        # query = f"""create table cc_merged_to_download as select url,
+        #             url_host_name,
+        #             url_host_registered_domain,
+        #             warc_filename,
+        #             warc_record_offset,
+        #             warc_record_end,
+        #             crawl
+        #             from (
+        #                 select url,
+        #                 url_host_name,
+        #                 url_host_registered_domain,
+        #                 warc_filename,
+        #                 warc_record_offset,
+        #                 warc_record_end,
+        #                 crawl,
+        #                 row_number() over (partition by url_host_name order by length(url) asc) as subpage_rank
+        #                 from urls_merged_cc) ranks
+        #             where subpage_rank <= {self.n_subpages}
+        #
+        #             UNION
+        #
+        #             (SELECT url,
+        #                     url_host_name,
+        #                     url_host_registered_domain,
+        #                     warc_filename,
+        #                     warc_record_offset,
+        #                     warc_record_end,
+        #                     crawl
+        #                     FROM urls_merged_cc
+        #             WHERE """ + ' OR '.join([f"url LIKE '%{keyword}%'" for keyword in self.url_keywords])\
+        #             + f'LIMIT {self.limit_pages_url_keywords})'

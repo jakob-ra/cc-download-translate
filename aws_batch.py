@@ -2,15 +2,19 @@ import boto3
 import time
 
 class AWSBatch:
-    def __init__(self, n_batches, batch_size, output_bucket, output_path, keywords_path, retry_attempts=3):
+    def __init__(self, n_batches, batch_size, output_bucket, output_path, keywords_path, image_name,
+                 aws_role, retry_attempts=3):
         self.n_batches = n_batches
         self.batch_size = batch_size
         self.output_bucket = output_bucket
         self.output_path = output_path
         self.keywords_path = keywords_path
+        self.aws_role = aws_role
         self.retry_attempts = retry_attempts
         self.batch_client = boto3.client('batch')
         self.batch_env_name = 'cc'
+        self.image_name = image_name
+
 
     def create_compute_environment_fargate(self):
         self.batch_client.create_compute_environment(
@@ -58,7 +62,7 @@ class AWSBatch:
             jobDefinitionName=self.batch_env_name,
             type='container',
             containerProperties={
-                'image': 'public.ecr.aws/r9v1u7o6/cc-download-translate:latest',
+                'image': self.image_name,
                 'resourceRequirements': [
                     {
                         'type': 'VCPU',
@@ -77,8 +81,8 @@ class AWSBatch:
                     f"--output_path={self.output_path}",
                     f"--keywords_path={self.keywords_path}",
                 ],
-                'jobRoleArn': 'arn:aws:iam::425352751544:role/cc-download', #'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
-                'executionRoleArn':  'arn:aws:iam::425352751544:role/cc-download', # 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+                'jobRoleArn': self.aws_role, #'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
+                'executionRoleArn':  self.aws_role, # 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
                 'networkConfiguration': {
                         'assignPublicIp': 'ENABLED',
                 }

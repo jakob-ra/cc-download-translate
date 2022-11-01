@@ -21,7 +21,7 @@ aws_config_credentials(cfg['credentials_csv_filepath'], cfg['region'], cfg['prof
 
 
 ## run athena lookup
-result_output_path = cfg['result_output_path'] + '/' + '_'.join(crawls) # path in output_bucket to store the downloads in batches
+result_output_path = cfg['result_output_path'] + '/' + '_'.join(cfg['crawls']) # path in output_bucket to store the downloads in batches
 aws_params = {
     'region': cfg['region'],
     'catalog': 'AwsDataCatalog',
@@ -29,17 +29,20 @@ aws_params = {
     'bucket': cfg['output_bucket'],
     'path': cfg['index_output_path'],
 }
-url_keywords = pd.read_csv(cfg['url_keywords_path']).tolist()
+url_keywords = pd.read_csv(cfg['url_keywords_path'], header=None).squeeze().tolist()
 
-athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'], cfg['n_subpages_per_domain'],
-                              url_keywords, limit_cc_table=None, keep_ccindex=True)
+athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'],
+                              cfg['n_subpages_per_domain'], url_keywords, limit_cc_table=10000,
+                              keep_ccindex=True, limit_pages_url_keywords=cfg['limit_pages_url_keywords'])
 athena_lookup.run_lookup()
 
 ## run batch job
 req_batches = int(athena_lookup.download_table_length//batch_size + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
 
-aws_batch = AWSBatch(2, 500, output_bucket, result_output_path, keywords_path, retry_attempts=1)
+
+aws_batch = AWSBatch(2, 500, cfg['output_bucket'], cfg['result_output_path'], cfg['keywords_path'],
+                     cfg['image_name'], cfg['aws_role'], retry_attempts=1)
 aws_batch.register_job_definition()
 aws_batch.submit_job()
 aws_batch.run()
