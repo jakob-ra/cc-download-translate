@@ -29,22 +29,22 @@ aws_params = {
     'bucket': cfg['output_bucket'],
     'path': cfg['index_output_path'],
 }
-url_keywords = pd.read_csv(cfg['url_keywords_path']).squeeze().tolist()
+url_keywords = pd.read_csv(cfg['url_keywords_path'], header=None, usecols=[0]).squeeze().tolist()
 
 athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'],
-                              cfg['n_subpages_per_domain'], url_keywords, limit_cc_table=10000,
+                              cfg['n_subpages_per_domain'], url_keywords, limit_cc_table=None,
                               keep_ccindex=True, limit_pages_url_keywords=cfg['limit_pages_url_keywords'])
 athena_lookup.run_lookup()
 
+pd.read_csv(cfg['s3path_url_list'] + 'dataprovider_merged_orbis_all_months_unique_urls_sample.csv')
+
 ## run batch job
-req_batches = int(athena_lookup.download_table_length//batch_size + 1)
-print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {batch_size}.')
+req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
+print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {cfg["batch_size"]}.')
 
-
-aws_batch = AWSBatch(2, 500, cfg['output_bucket'], cfg['result_output_path'], cfg['keywords_path'],
-                     cfg['image_name'], cfg['aws_role'], retry_attempts=1)
-aws_batch.register_job_definition()
-aws_batch.submit_job()
+aws_batch = AWSBatch(2, 100, cfg['output_bucket'], cfg['result_output_path'],
+                     cfg['keywords_path'], cfg['image_name'], cfg['batch_role'], retry_attempts=1,
+                     keep_compute_env=True, keep_job_queue=True)
 aws_batch.run()
 
 

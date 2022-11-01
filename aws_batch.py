@@ -3,7 +3,7 @@ import time
 
 class AWSBatch:
     def __init__(self, n_batches, batch_size, output_bucket, output_path, keywords_path, image_name,
-                 aws_role, retry_attempts=3):
+                 aws_role, retry_attempts=3, keep_compute_env=False, keep_job_queue=False):
         self.n_batches = n_batches
         self.batch_size = batch_size
         self.output_bucket = output_bucket
@@ -14,7 +14,8 @@ class AWSBatch:
         self.batch_client = boto3.client('batch')
         self.batch_env_name = 'cc'
         self.image_name = image_name
-
+        self.keep_compute_env = keep_compute_env
+        self.keep_job_queue = keep_job_queue
 
     def create_compute_environment_fargate(self):
         self.batch_client.create_compute_environment(
@@ -111,7 +112,9 @@ class AWSBatch:
         time.sleep(5)
 
     def run(self):
-        self.create_compute_environment_fargate()
-        self.create_job_queue()
+        if not self.keep_compute_env:
+            self.create_compute_environment_fargate()
+        if not self.keep_job_queue:
+            self.create_job_queue()
         self.register_job_definition()
         self.submit_job()

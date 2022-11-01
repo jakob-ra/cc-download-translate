@@ -3,13 +3,14 @@ import pandas as pd
 import sys
 import s3fs
 from utils import convert_file_size
+import boto3
 
 class Athena_lookup():
     def __init__(self, aws_params: dict, s3path_url_list, crawls: list, n_subpages: int, url_keywords: list,
                  athena_price_per_tb=5, wait_seconds=3600, limit_cc_table=10000, keep_ccindex=False,
                  limit_pages_url_keywords=100):
         self.athena_client = boto3.client('athena')
-        self.s3_client = session.client('s3')
+        self.s3_client = boto3.client('s3')
         self.aws_params = aws_params
         self.s3path_url_list = s3path_url_list
         self.crawls = crawls
@@ -133,7 +134,7 @@ class Athena_lookup():
             self.execute_query(query)
         query = f"""DROP TABLE IF EXISTS urls_merged_cc;"""
         self.execute_query(query)
-        query = f"""DROP TABLE IF EXISTS cc_merged_to_download;"""
+        query = f"""DROP TABLE IF EXISTS urls_merged_cc_to_download;"""
         self.execute_query(query)
 
     def create_url_list_table(self):
@@ -274,35 +275,51 @@ class Athena_lookup():
                                 FROM urls_merged_cc
                         WHERE """ + ' OR '.join([f"url LIKE '%{keyword}%'" for keyword in self.url_keywords])
             if self.limit_pages_url_keywords:
-                keyword_subpages_query +=  f'LIMIT {self.limit_pages_url_keywords})'
+                keyword_subpages_query +=  f' LIMIT {self.limit_pages_url_keywords})'
             else:
                 keyword_subpages_query += ')'
 
         # form query
         if self.n_subpages and self.url_keywords:
-            query = f"""CREATE TABLE urls_merged_cc_subpages AS
-            SELECT * FROM {shortest_subpages_query} UNION {keyword_subpages_query}"""
+            query = f"""CREATE TABLE urls_merged_cc_to_download AS
+            SELECT url,
+            url_host_name,
+            url_host_registered_domain,
+            warc_filename,
+            warc_record_offset,
+            warc_record_end,
+            crawl
+            FROM {shortest_subpages_query} 
+            UNION 
+            {keyword_subpages_query}"""
         elif self.n_subpages:
-            query = f"""CREATE TABLE urls_merged_cc_subpages AS
-            SELECT * FROM {shortest_subpages_query}"""
+            query = f"""CREATE TABLE urls_merged_cc_to_download AS
+            SELECT url,
+            url_host_name,
+            url_host_registered_domain,
+            warc_filename,
+            warc_record_offset,
+            warc_record_end,
+            crawl 
+            FROM {shortest_subpages_query}"""
         elif self.url_keywords:
-            query = f"""CREATE TABLE urls_merged_cc_subpages AS
+            query = f"""CREATE TABLE urls_merged_cc_to_download AS
             SELECT * FROM {keyword_subpages_query}"""
         else:
-            query = f"""CREATE TABLE urls_merged_cc_subpages AS
+            query = f"""CREATE TABLE urls_merged_cc_to_download AS
             SELECT * FROM urls_merged_cc"""
 
         self.execute_query(query)
 
     def get_length_download_table(self):
-        query = f"""select count(*) from cc_merged_to_download"""
+        query = f"""SELECT COUNT(*) FROM urls_merged_cc_to_download"""
 
         download_table_length_location, _ = self.execute_query(query)
 
         self.download_table_length = pd.read_csv(download_table_length_location).values[0][0]
 
         # find number of unique hostnames
-        query = f"""select count(distinct url_host_registered_domain) from cc_merged_to_download"""
+        query = f"""SELECT COUNT(DISTINCT url_host_registered_domain) FROM urls_merged_cc_to_download"""
 
         download_table_n_unique_host_location, _ = self.execute_query(query)
 

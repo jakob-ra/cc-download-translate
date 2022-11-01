@@ -2,12 +2,15 @@ FROM python:3.10.7
 
 WORKDIR /cc-download
 
+
 # Install dependencies:
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+RUN git clone RUN git clone git://github.com/jakob-ra/cc-download
+
 # download and install argos models
-COPY download_install_argos_models.py .
+#COPY download_install_argos_models.py .
 #RUN python3 download_install_argos_models.py
 
 COPY cc-download ./cc-download

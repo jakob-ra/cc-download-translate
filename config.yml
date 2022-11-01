@@ -2,6 +2,7 @@
 region: 'us-east-1'
 profile_name: 'default'
 credentials_csv_filepath: 'C:/Users/Jakob/Downloads/jakob-s3-ec2-athena_accessKeys.csv'
+batch_role: 'arn:aws:iam::425352751544:role/cc-download' # role to use for the batch job
 
 # input paths
 s3path_url_list: 's3://cc-extract/dataprovider_all_months/only_urls/' # folder where url list is stored, starts with 's3://'
@@ -23,8 +24,7 @@ n_subpages_per_domain: 10 # maximum number of subpages to download per domain (d
 limit_pages_url_keywords: 100 # maximum number of subpages containing a keyword from the url keyword list to download per domain
 
 # batch settings
-role_name: 'arn:aws:iam::425352751544:role/cc-download' # role to use for the batch job
-image_name: 'public.ecr.aws/r9v1u7o6/cc-download-translate:latest' # docker image to use for the batch job
+image_name: 'public.ecr.aws/r9v1u7o6/cc-download:latest' # docker image to use for the batch job
 batch_size: 5000 # number of subpages to download per batch
 
 
