@@ -31,15 +31,13 @@ athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'],
                               keep_ccindex=True, limit_pages_url_keywords=cfg['limit_pages_url_keywords'])
 athena_lookup.run_lookup()
 
-pd.read_csv(cfg['s3path_url_list'] + 'dataprovider_merged_orbis_all_months_unique_urls_sample.csv')
-
 ## run batch job
 req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {cfg["batch_size"]}.')
 
-aws_batch = AWSBatch(2, 100, cfg['output_bucket'], cfg['result_output_path'],
-                     cfg['keywords_path'], cfg['image_name'], cfg['batch_role'], retry_attempts=1,
-                     keep_compute_env=True, keep_job_queue=True)
+aws_batch = AWSBatch(2, cfg["batch_size"], cfg['output_bucket'], result_output_path,
+                     cfg['keywords_path'], cfg['image_name'], cfg['batch_role'], retry_attempts=cfg['retry_attempts'],
+                     attempt_duration=cfg['attempt_duration'], keep_compute_env=True, keep_job_queue=True)
 aws_batch.run()
 
 

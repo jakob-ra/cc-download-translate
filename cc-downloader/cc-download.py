@@ -87,7 +87,7 @@ if __name__ == "__main__":
     print(sts.get_caller_identity())
 
     # read cc-index table with warc filenames and byte positions
-    query = f'SELECT * FROM cc_merged_to_download OFFSET {batch_n} LIMIT {args.batch_size} '
+    query = f'SELECT * FROM urls_merged_cc_to_download OFFSET {batch_n} LIMIT {args.batch_size} '
     df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
     assert len(df) > 1, "Empty input table!"
 

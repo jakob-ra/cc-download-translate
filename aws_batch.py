@@ -2,13 +2,13 @@ import boto3
 import time
 
 class AWSBatch:
-    def __init__(self, n_batches, batch_size, output_bucket, output_path, keywords_path, image_name,
-                 aws_role, retry_attempts=3, keep_compute_env=False, keep_job_queue=False,
-                 attempt_duration=1800):
+    def __init__(self, n_batches, batch_size, output_bucket, result_output_path, keywords_path, image_name,
+                 aws_role, retry_attempts=3, attempt_duration=1800,
+                 keep_compute_env=False, keep_job_queue=False):
         self.n_batches = n_batches
         self.batch_size = batch_size
         self.output_bucket = output_bucket
-        self.output_path = output_path
+        self.result_output_path = result_output_path
         self.keywords_path = keywords_path
         self.aws_role = aws_role
         self.retry_attempts = retry_attempts
@@ -81,7 +81,7 @@ class AWSBatch:
                     "cc-download.py",
                     f"--batch_size={self.batch_size}",
                     f"--output_bucket={self.output_bucket}",
-                    f"--output_path={self.output_path}",
+                    f"--result_output_path={self.result_output_path}",
                     f"--keywords_path={self.keywords_path}",
                 ],
                 'jobRoleArn': self.aws_role, #'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
