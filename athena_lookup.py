@@ -188,40 +188,6 @@ class Athena_lookup():
         query = f"""MSCK REPAIR TABLE {self.ccindex_table_name};"""
         self.execute_query(query)
 
-    # def subset_ccindex_table(self):
-    #     # limit (for debugging)
-    #     if self.limit_cc_table == None:
-    #         limit = ''
-    #     else:
-    #         limit = 'LIMIT ' + str(self.limit_cc_table)
-    #
-    #     # if list of crawls specified, join them with OR: (crawl = 'CC-MAIN-2020-24' OR crawl = 'CC-MAIN-2020-52')
-    #     crawls = '(' + ' OR '.join(f'crawl = \'{w}\'' for w in self.crawls) + ')'
-    #
-    #     query = f"""Create table ccindex_smaller AS
-    #     SELECT url,
-    #            url_host_name,
-    #            url_host_registered_domain,
-    #            warc_filename,
-    #            warc_record_offset,
-    #            warc_record_offset + warc_record_length - 1 as warc_record_end,
-    #            crawl,
-    #            subset
-    #     FROM ccindex.ccindex
-    #     WHERE {crawls}
-    #       AND subset = 'warc'
-    #     {limit};"""
-    #     self.execute_query(query)
-    #     self.ccindex_table_name = 'ccindex_smaller'
-
-    # def inner_join(self):
-    #     query = f"""CREATE TABLE urls_merged_cc AS
-    #     SELECT *
-    #     FROM {self.ccindex_table_name}, url_list
-    #     WHERE {self.ccindex_table_name}.url_host_registered_domain = url_list.websiteaddress
-    #     """
-    #     self.execute_query(query)
-
     def inner_join(self):
         # limit (for debugging)
         if self.limit_cc_table:
@@ -325,6 +291,12 @@ class Athena_lookup():
 
         self.n_unique_hosts = pd.read_csv(download_table_n_unique_host_location).values[0][0]
 
+        query = f"""SELECT COUNT(DISTINCT websiteaddress) FROM url_list"""
+
+        input_table_length_location, _ = self.execute_query(query)
+
+        self.input_table_length = pd.read_csv(input_table_length_location).values[0][0]
+
 
     # def save_table_as_csv(self):
     #     query = f"""SELECT * FROM cc_merged_to_download"""
@@ -345,6 +317,7 @@ class Athena_lookup():
         # self.save_table_as_csv()
         print(f'The results contain {self.download_table_length} subpages from {self.n_unique_hosts}'
               f' unique hostnames.')
+        print(f'Matched {self.n_unique_hosts/self.input_table_length} of the input domains to at least one subpage.')
 
 
 

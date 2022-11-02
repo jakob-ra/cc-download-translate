@@ -35,7 +35,7 @@ athena_lookup.run_lookup()
 req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
 print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {cfg["batch_size"]}.')
 
-aws_batch = AWSBatch(2, cfg["batch_size"], cfg['output_bucket'], result_output_path,
+aws_batch = AWSBatch(req_batches, cfg["batch_size"], cfg['output_bucket'], result_output_path,
                      cfg['keywords_path'], cfg['image_name'], cfg['batch_role'], retry_attempts=cfg['retry_attempts'],
                      attempt_duration=cfg['attempt_duration'], keep_compute_env=True, keep_job_queue=True)
 aws_batch.run()

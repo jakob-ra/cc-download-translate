@@ -1,4 +1,5 @@
 from botocore.exceptions import ClientError
+import time
 
 def exponential_backoff(func, *args, **kwargs):
     """Exponential backoff to deal with request limits"""
