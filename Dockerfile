@@ -23,3 +23,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 # aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 # docker push public.ecr.aws/r9v1u7o6/cc-download:latest
 # docker push public.ecr.aws/r9v1u7o6/cc-download-translate:latest
+

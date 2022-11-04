@@ -40,10 +40,6 @@ aws_batch = AWSBatch(req_batches, cfg["batch_size"], cfg['output_bucket'], resul
                      attempt_duration=cfg['attempt_duration'], keep_compute_env=True, keep_job_queue=True)
 aws_batch.run()
 
-
-
-
-
 df = pd.read_csv('s3://cc-extract/cc-download-test/batch_n_0.csv')
 
 
@@ -63,11 +59,6 @@ compute_time = req_batches * 600 / 3600
 res = pd.read_csv(athena_lookup.download_table_location)
 
 df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 * batch_size), nrows=batch_size, header=0)
-
-
-
-
-
 
 
 
