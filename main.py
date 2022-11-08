@@ -2,66 +2,52 @@ from athena_lookup import Athena_lookup
 import pandas as pd
 import os
 import s3fs
-from aws_config import aws_config_credentials
+from aws_config import aws_configure_credentials
 from aws_batch import AWSBatch
 import yaml
 
-## read config file
-with open("config.yml", "r", encoding='utf8') as ymlfile:
-    cfg = yaml.safe_load(ymlfile)
+if __name__ == '__main__':
+    ## read config file
+    with open("config.yml", "r", encoding='utf8') as ymlfile:
+        cfg = yaml.safe_load(ymlfile)
 
-## authenticate to AWS
-aws_config_credentials(cfg['credentials_csv_filepath'], cfg['region'], cfg['profile_name'])
+    ## authenticate to AWS
+    aws_configure_credentials(cfg['credentials_csv_filepath'], cfg['region'], cfg['profile_name'])
 
-# available_crawls = pd.read_csv('common-crawls.txt')
+    # available_crawls = pd.read_csv('common-crawls.txt')
 
-## run athena lookup
-result_output_path = cfg['result_output_path'] + '/' + '_'.join(cfg['crawls']) # path in output_bucket to store the downloads in batches
-aws_params = {
-    'region': cfg['region'],
-    'catalog': 'AwsDataCatalog',
-    'database': 'ccindex',
-    'bucket': cfg['output_bucket'],
-    'path': cfg['index_output_path'],
-}
-url_keywords = pd.read_csv(cfg['url_keywords_path'], header=None, usecols=[0]).squeeze().tolist()
+    ## run athena lookup
+    result_output_path = cfg['result_output_path'] + '/' + '_'.join(cfg['crawls']) # path in output_bucket to store the downloads in batches
+    aws_params = {
+        'region': cfg['region'],
+        'catalog': 'AwsDataCatalog',
+        'database': 'ccindex',
+        'bucket': cfg['output_bucket'],
+        'path': cfg['index_output_path'],
+    }
+    url_keywords = pd.read_csv(cfg['url_keywords_path'], header=None, usecols=[0]).squeeze().tolist()
 
-athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'],
-                              cfg['n_subpages_per_domain'], url_keywords, limit_cc_table=None,
-                              keep_ccindex=True, limit_pages_url_keywords=cfg['limit_pages_url_keywords'])
-athena_lookup.run_lookup()
+    answer = input(f'Estimated lookup costs: {0.2*len(cfg["crawls"]):.2f}$-{0.5*len(cfg["crawls"]):.2f} $. Continue? [y]/[n]').lower()
+    if answer == 'y':
+        athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'],
+                                      cfg['n_subpages_per_domain'], url_keywords, limit_cc_table=None,
+                                      keep_ccindex=True, limit_pages_url_keywords=cfg['limit_pages_url_keywords'])
+        athena_lookup.run_lookup()
+    else:
+        raise Exception('Lookup aborted.')
 
-## run batch job
-req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
-print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {cfg["batch_size"]}.')
+    ## run batch job
+    req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
+    print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {cfg["batch_size"]}.')
+    answer = input(f'Estimated download costs: {0.33*athena_lookup.download_table_length*10**-6:.2f}$. Continue? [y]/[n]').lower()
 
-aws_batch = AWSBatch(req_batches, cfg["batch_size"], cfg['output_bucket'], result_output_path,
-                     cfg['keywords_path'], cfg['image_name'], cfg['batch_role'], retry_attempts=cfg['retry_attempts'],
-                     attempt_duration=cfg['attempt_duration'], keep_compute_env=True, keep_job_queue=True)
-aws_batch.run()
-
-df = pd.read_csv('s3://cc-extract/cc-download-test/batch_n_0.csv')
-
-
-
-# estimate aws batch cost
-compute_time = req_batches * 600 / 3600
-0.01293507*compute_time*0.25 + 0.00142037*compute_time*0.5 # FARGATE SPOT
-0.0004*req_batches*batch_size/1000 # S3 requests
-0.37*len(crawls) # athena lookup cost
-# athena retrieval costs
-
-# instance_price_per_hour = 0.0035
-# time_for_completion = 0.1 # 6 minutes
-# instance_price_per_hour*req_batches*time_for_completion*len(available_crawls)
-
-
-res = pd.read_csv(athena_lookup.download_table_location)
-
-df = pd.read_csv(athena_lookup.download_table_location, skiprows=range(1, 17000 * batch_size), nrows=batch_size, header=0)
-
-
-
+    if answer == 'y':
+        aws_batch = AWSBatch(req_batches, cfg["batch_size"], cfg['output_bucket'], result_output_path,
+                             cfg['keywords_path'], cfg['image_name'], cfg['batch_role'], retry_attempts=cfg['retry_attempts'],
+                             attempt_duration=cfg['attempt_duration'], keep_compute_env=True, keep_job_queue=True)
+        aws_batch.run()
+    else:
+        raise Exception('Download batch job aborted.')
 
 
 
@@ -143,29 +129,3 @@ df[df.lang == 'de'].paragraphs.iloc[:100].apply(lambda x: argos_translate(model,
 
 model.translate()
 
-
-
-
-
-
-
-
-
-# get rid of old compute environment
-# try:
-#     # batch_client.deregister_job_definition(jobDefinition=batch_env_name)
-#     batch_client.update_job_queue(jobQueue=batch_env_name, state='DISABLED')
-#     time.sleep(2)
-#     batch_client.delete_job_queue(jobQueue=batch_env_name)
-#     time.sleep(2)
-#     batch_client.update_compute_environment(
-#         computeEnvironment=batch_env_name,
-#         state='DISABLED',
-#     )
-#     time.sleep(2)
-#     batch_client.delete_compute_environment(
-#         computeEnvironment='cc-download'
-#     )
-#     time.sleep(2)
-# except Exception as e:
-#     print(e)

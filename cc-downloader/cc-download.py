@@ -4,35 +4,16 @@ from warcio.archiveiterator import ArchiveIterator
 import time
 from io import BytesIO
 from bs4 import BeautifulSoup, SoupStrainer
-import os
 import argparse
 import awswrangler as wr
 import numpy as np
-from utils import exponential_backoff
-from passage_extraction import PassageExtractor
+import os
+import json
 
-# from langdetect import detect
-# import argostranslate.translate
-#
-# def load_argos_model(from_code, to_code):
-#     installed_languages = argostranslate.translate.get_installed_languages()
-#     from_lang = list(filter(lambda x: x.code == from_code, installed_languages))[0]
-#     to_lang = list(filter(lambda x: x.code == to_code, installed_languages))[0]
-#     model = from_lang.get_translation(to_lang)
-#
-#     return model
-#
-# def argos_translate(model, text):
-#     try:
-#         return model.translate(text)
-#     except:
-#         return None
-#
-# def detect_lang(text: str) -> str:
-#     try:
-#         return detect(text)
-#     except:
-#         return None
+from passage_extraction import PassageExtractor
+from problem_classification import ProblemClassifier
+from utils import install_import
+
 
 def fetch_process_warc_records(row, s3client, keywords):
     """Fetch all WARC records defined by filenames and offsets in batch,
@@ -63,7 +44,24 @@ def fetch_process_warc_records(row, s3client, keywords):
     return extracts
 
 
+
 if __name__ == "__main__":
+    print('Installing packages...')
+    for package in ['argostranslate', 'langdetect', 'spacy', 'spacytextblob']:
+        install_import(package)
+    print('Packages installed.')
+    import spacy
+
+    print('Downloading Spacy models...')
+    # download spacy models if not already installed
+    spacy_model = 'en_core_web_trf'
+    if not spacy.util.is_package(spacy_model):
+        spacy.cli.download(spacy_model)
+    print('Spacy models downloaded.')
+
+    from utils import exponential_backoff, download_argos_model, install_argos_model, load_argos_model, \
+        argos_translate, detect_lang, sentiment_analysis_spacy
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--output_bucket", type=str, required=True)
@@ -91,9 +89,6 @@ if __name__ == "__main__":
     df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
     assert len(df) > 1, "Empty input table!"
 
-    # df = pd.read_csv(args.download_table_loc, skiprows=range(1, batch_n * args.batch_size),
-    #                  nrows=args.batch_size, header=0)
-
     # initialize s3
     s3client = boto3.client('s3', region_name='us-east-1', use_ssl=False)
 
@@ -108,25 +103,51 @@ if __name__ == "__main__":
     # drop offsets
     df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
 
-    # explode so we have one paragraph per row
-    # df = df[['url_host_name', 'url', 'crawl', 'paragraphs']].explode('paragraphs')
-
     # drop pages without any paragraphs
     df = df[df.paragraphs.str.len() > 0].copy(deep=True)
 
     # detect language on first characters of first paragraph
-    # print('Starting language detection...')
-    # start = time.process_time()
-    # df['lang'] = df.paragraphs.str[0].str.strip().str[:50].apply(detect_lang)
-    # print(f'Success! Finished language detection in {time.process_time() - start} seconds.')
+    print('Starting language detection...')
+    start = time.process_time()
+    df['lang'] = df.paragraphs.str[0].str.strip().str[:50].apply(detect_lang)
+    print(f'Success! Finished language detection in {time.process_time() - start} seconds.')
+
+    # explode so we have one paragraph per row
+    df = df.explode('paragraphs')
 
     # translation
-    # print(f'Starting translation of {len(df[df.lang != "en"])} paragraphs...')
-    # df['translated_paragraphs'] = np.nan
-    # for lang in ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']:
-    #     model = load_argos_model(lang, 'en')
-    #     df.loc[df.lang == lang, 'translated_paragraphs'] = df[df.lang == lang].paragraphs.apply(lambda paragraphs: [argos_translate(model, text) for text in paragraphs])
-    # print(f'Success! Finished translation in {time.process_time() - start} seconds.')
+    print('Starting translation...')
+    start = time.process_time()
+    df['translated_paragraphs'] = np.nan
+    to_code = 'en'
+    langs = ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']
+    langs = [l for l in df.lang.unique() if l in langs]
+    for from_code in langs:
+        # print(f'Downloading model {from_code}-{to_code}...')
+        # download_install_argos_model(from_code, to_code)
+        print(f'Loading model {from_code}-{to_code}...')
+        model = load_argos_model(from_code, to_code)
+        print(f'Translating {len(df[df.lang == from_code])} paragraphs from {from_code} to {to_code}...')
+        df.loc[df.lang == from_code, 'translated_paragraphs'] = df[df.lang == from_code].paragraphs.apply(lambda text: argos_translate(model, text))
+    df['translated_paragraphs'] = df.translated_paragraphs.astype(str).str.strip()
+    print(f'Success! Finished translation in {time.process_time() - start} seconds.')
+
+    # problem classification
+    print('Starting problem classification...')
+    start = time.process_time()
+    with open('cc-downloader/topic_keywords.json', 'r') as f:
+        topic_keywords = json.load(f)
+    problem_classifier = ProblemClassifier(topic_keywords, spacy_model=spacy_model)
+    df = pd.concat([df, df['translated_paragraphs'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
+    print(f'Success! Finished problem classification in {time.process_time() - start} seconds.')
+
+    # sentiment analysis
+    print('Starting sentiment analysis...')
+    start = time.process_time()
+    nlp = spacy.load(spacy_model)
+    nlp.add_pipe('spacytextblob')
+    df['sentiment'] = df.translated_paragraphs.apply(str).apply(lambda x: sentiment_analysis_spacy(x, nlp))
+    print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
     # save to S3
     s3_path = f's3://{args.output_bucket}/{args.result_output_path}/batch_n_{batch_n}.csv'
@@ -134,6 +155,4 @@ if __name__ == "__main__":
     print(f'Results saved to: {s3_path}')
 
 
-# take only unique paragraphs - doesn't make sense to do this in each batch, do this at the end instead
-# df = df.groupby(['url_host_name', 'url', 'paragraphs']).crawl.apply(set).reset_index()
 
