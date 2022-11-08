@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 
 ## the command is submitted directly to AWS batch as a job definition:
-# python cc-download.py --batch_size=100 --output_bucket=cc-extract --result_output_path=cc-download-test --keywords='https://github.com/jakob-ra/cc-downloader/raw/main/keywords.csv'
+# python cc-downloader/cc-download.py --batch_size=100 --output_bucket=cc-extract --result_output_path=cc-download-test --keywords='https://github.com/jakob-ra/cc-downloader/raw/main/keywords.csv' --topic_keywords='https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.csv'
 
 
 ## to push the dockerfile to Amazon Elastic Container Registry:

@@ -11,6 +11,7 @@ import os
 import json
 from textblob import TextBlob
 import nltk
+import requests
 
 from passage_extraction import PassageExtractor
 from problem_classification import ProblemClassifier
@@ -70,6 +71,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_bucket", type=str, required=True)
     parser.add_argument("--result_output_path", type=str, required=True)
     parser.add_argument("--keywords_path", type=str, required=True) # default='https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv')
+    parser.add_argument("--topic_keywords_path", type=str, required=True)
     args = parser.parse_args()
 
     keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
@@ -126,8 +128,9 @@ if __name__ == "__main__":
     langs = ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']
     langs = [l for l in df.lang.unique() if l in langs]
     for from_code in langs:
-        # print(f'Downloading model {from_code}-{to_code}...')
-        # download_install_argos_model(from_code, to_code)
+        print(f'Downloading model {from_code}-{to_code}...')
+        model_path = download_argos_model(from_code, to_code)
+        install_argos_model(model_path)
         print(f'Loading model {from_code}-{to_code}...')
         model = load_argos_model(from_code, to_code)
         print(f'Translating {len(df[df.lang == from_code])} paragraphs from {from_code} to {to_code}...')
@@ -138,8 +141,10 @@ if __name__ == "__main__":
     # problem classification
     print('Starting problem classification...')
     start = time.process_time()
-    with open('cc-downloader/topic_keywords.json', 'r') as f:
-        topic_keywords = json.load(f)
+    from urllib.request import urlopen
+    import json
+    with urlopen('https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.csv') as url:
+        topic_keywords = json.load(url)
     problem_classifier = ProblemClassifier(topic_keywords)
     df = pd.concat([df, df['translated_paragraphs'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
     print(f'Success! Finished problem classification in {time.process_time() - start} seconds.')

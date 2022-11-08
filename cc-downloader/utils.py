@@ -7,6 +7,7 @@ import argostranslate.translate
 from langdetect import detect
 import subprocess
 import sys
+import os
 
 def exponential_backoff(func, *args, **kwargs):
     """Exponential backoff to deal with request limits"""
