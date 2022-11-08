@@ -1,9 +1,9 @@
-from textblob import Word
 import re
+from nltk.stem import WordNetLemmatizer
 
 class ProblemClassifier:
     """
-    A class to find keyword matches in a text and return a sentiment score.
+    A class to find keyword matches in a text.
 
     Parameters
     ----------
@@ -32,7 +32,7 @@ class ProblemClassifier:
     form_queries()
         Forms regex queries for each topic.
     classify(text: str) -> dict
-        Classifies the text into a topic.
+        Returns dict with topic as key and number of matches as value.
 
     Examples
     --------
@@ -46,6 +46,7 @@ class ProblemClassifier:
         self.topics = topic_keywords.keys()
         self.lemmatize_keywords = lemmatize_keywords
         self.lemmatize_text = lemmatize_text
+        self.lemmatizer = WordNetLemmatizer()
         if lemmatize_keywords:
             self.topic_keywords = {topic: keywords + [self.lemmatize(keyword) for keyword in keywords] for topic, keywords in self.topic_keywords.items()}
         self.form_queries()
@@ -55,11 +56,11 @@ class ProblemClassifier:
     #
     #     return ' '.join([token.lemma_ for token in doc])
 
-    def lemmatize(self, word: str): -> str
-        return Word(word).lemmatize()
+    def lemmatize(self, word: str):
+        return self.lemmatizer.lemmatize(word)
 
     def form_queries(self):
-        """ Returns regex query that matches on all keywords in the keyword list if they appear within word
+        """ Forms regex query that matches on all keywords in the keyword list if they appear within word
         boundaries (so not within another word) """
 
         self.topic_queries = {}

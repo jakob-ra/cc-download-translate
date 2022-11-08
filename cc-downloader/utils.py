@@ -66,18 +66,3 @@ def argos_translate(model, text):
         return model.translate(text)
     except:
         return None
-
-def sentiment_analysis_spacy(input_text, spacy_model):
-    doc = spacy_model(input_text)
-    polarity = doc._.polarity
-    # subjectivity = doc._.subjectivity
-
-    return polarity
-
-import spacy
-import pandas as pd
-df = pd.DataFrame({'text': ['I am happy', 'I am sad', 'I am angry', 'I am happy', 'I am sad', 'I am angry']})
-nlp = spacy.load("en_core_web_trf")
-doc = nlp(df.text.iloc[0])
-[tok.lemma_ for tok in doc]
-[[tok.lemma_ for tok in doc] for doc in nlp.pipe(df.text, batch_size=32, n_process=3, disable=["parser", "ner"])]

@@ -13,7 +13,7 @@ url_keywords_path: 'https://github.com/jakob-ra/cc-downloader/raw/main/url_keywo
 ## output paths
 output_bucket: 'cc-extract' # bucket to store the results
 index_output_path: 'urls_merged_cc' # path in output_bucket to store the index results
-result_output_path: 'cc-download' # path in output_bucket to store the downloads in batches
+result_output_path: 'cc-download-test' # path in output_bucket to store the downloads in batches
 
 ## download settings
 crawls: # crawls to include (can be multiple), for list see https://commoncrawl.org/the-data/get-started/
@@ -23,7 +23,7 @@ limit_pages_url_keywords: 100 # maximum number of subpages containing a keyword 
 
 ## batch settings
 image_name: 'public.ecr.aws/r9v1u7o6/cc-download:latest' # docker image to use for the batch job
-batch_size: 5000 # number of subpages to download per batch
-retry_attempts: 3 # number of times to retry a failed download batch
+batch_size: 100 # number of subpages to download per batch
+retry_attempts: 1 # number of times to retry a failed download batch
 attempt_duration: 1800 # duration in seconds to wait before retrying to download a batch
 

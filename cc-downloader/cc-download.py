@@ -9,10 +9,12 @@ import awswrangler as wr
 import numpy as np
 import os
 import json
+from textblob import TextBlob
+import nltk
 
 from passage_extraction import PassageExtractor
 from problem_classification import ProblemClassifier
-from utils import install_import
+from utils import install_import, exponential_backoff
 
 
 def fetch_process_warc_records(row, s3client, keywords):
@@ -41,26 +43,27 @@ def fetch_process_warc_records(row, s3client, keywords):
         extractor = PassageExtractor(text, keywords)
         extracts += extractor.extract_relevant_passages()
 
-    return extracts
+    return list(set(extracts)) # remove duplicates
 
 
 
 if __name__ == "__main__":
     print('Installing packages...')
-    for package in ['argostranslate', 'langdetect', 'spacy', 'spacytextblob']:
+    for package in ['argostranslate', 'langdetect', 'textblob']:
         install_import(package)
     print('Packages installed.')
-    import spacy
 
-    print('Downloading Spacy models...')
-    # download spacy models if not already installed
-    spacy_model = 'en_core_web_trf'
-    if not spacy.util.is_package(spacy_model):
-        spacy.cli.download(spacy_model)
-    print('Spacy models downloaded.')
+    # download textblob corpora
+    print('Downloading textblob corpora...')
+    os.system('python -m textblob.download_corpora lite')
+    print('Corpora downloaded.')
 
-    from utils import exponential_backoff, download_argos_model, install_argos_model, load_argos_model, \
-        argos_translate, detect_lang, sentiment_analysis_spacy
+    # download nltk corpora
+    print('Downloading nltk corpora...')
+    nltk.download('omw-1.4')
+    print('nltk corpora downloaded.')
+
+    from utils import download_argos_model, install_argos_model, load_argos_model, argos_translate, detect_lang
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, required=True)
@@ -137,16 +140,14 @@ if __name__ == "__main__":
     start = time.process_time()
     with open('cc-downloader/topic_keywords.json', 'r') as f:
         topic_keywords = json.load(f)
-    problem_classifier = ProblemClassifier(topic_keywords, spacy_model=spacy_model)
+    problem_classifier = ProblemClassifier(topic_keywords)
     df = pd.concat([df, df['translated_paragraphs'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
     print(f'Success! Finished problem classification in {time.process_time() - start} seconds.')
 
     # sentiment analysis
     print('Starting sentiment analysis...')
     start = time.process_time()
-    nlp = spacy.load(spacy_model)
-    nlp.add_pipe('spacytextblob')
-    df['sentiment'] = df.translated_paragraphs.apply(str).apply(lambda x: sentiment_analysis_spacy(x, nlp))
+    df['sentiment'] = df.translated_paragraphs.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
     print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
     # save to S3
