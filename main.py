@@ -1,8 +1,6 @@
 from athena_lookup import Athena_lookup
 import pandas as pd
-import os
-import s3fs
-from aws_config import aws_configure_credentials
+from aws_config import aws_config_credentials
 from aws_batch import AWSBatch
 import yaml
 
@@ -12,7 +10,7 @@ if __name__ == '__main__':
         cfg = yaml.safe_load(ymlfile)
 
     ## authenticate to AWS
-    aws_configure_credentials(cfg['credentials_csv_filepath'], cfg['region'], cfg['profile_name'])
+    aws_config_credentials(cfg['credentials_csv_filepath'], cfg['region'], cfg['profile_name'])
 
     # available_crawls = pd.read_csv('common-crawls.txt')
 
@@ -37,7 +35,7 @@ if __name__ == '__main__':
         raise Exception('Lookup aborted.')
 
     ## run batch job
-    req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
+    req_batches = 2 # int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
     print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {cfg["batch_size"]}.')
     answer = input(f'Estimated download costs: {0.33*athena_lookup.download_table_length*10**-6:.2f}$. Continue? [y]/[n]').lower()
 
