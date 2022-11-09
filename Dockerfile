@@ -13,10 +13,9 @@ RUN python -m textblob.download_corpora lite
 RUN python -c "import nltk; nltk.download('omw-1.4')"
 
 # download and install argos models
-RUN python download_install_argos_models.py
+#RUN python download_install_argos_models.py
 
-#CMD ["python", "cc-download.py", "--batch_size=100", "--output_bucket=cc-extract", "--result_output_path=cc-download-test", "--keywords='https://github.com/jakob-ra/cc-downloader/raw/main/keywords.csv'", "--topic_keywords='https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.json'"]
-CMD python cc-download.py --batch_size=100 --output_bucket=cc-extract --result_output_path=cc-download-test --keywords='https://github.com/jakob-ra/cc-downloader/raw/main/keywords.csv' --topic_keywords='https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.json'
+#CMD python cc-download.py --batch_size=100 --output_bucket=cc-extract --result_output_path=cc-download-test --keywords='https://github.com/jakob-ra/cc-downloader/raw/main/keywords.csv' --topic_keywords='https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.json'
 
 ## the command is submitted directly to AWS batch as a job definition:
 # python cc-downloader/cc-download.py --batch_size=100 --output_bucket=cc-extract --result_output_path=cc-download-test --keywords='https://github.com/jakob-ra/cc-downloader/raw/main/keywords.csv' --topic_keywords='https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.json'

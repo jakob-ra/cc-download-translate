@@ -89,11 +89,11 @@ class AWSBatch:
                 'resourceRequirements': [
                     {
                         'type': 'VCPU',
-                        'value': '0.25',
+                        'value': str(self.vcpus),
                     },
                     {
                         'type': 'MEMORY',
-                        'value': '512',
+                        'value': str(self.memory),
                     },
                 ],
                 'command': [

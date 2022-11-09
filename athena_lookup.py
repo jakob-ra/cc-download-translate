@@ -1,7 +1,6 @@
 import time
 import pandas as pd
 import sys
-import s3fs
 from utils import convert_file_size
 import boto3
 
@@ -240,6 +239,7 @@ class Athena_lookup():
         SELECT url,
                url_host_name,
                url_host_registered_domain,
+               url_host_tld,
                warc_filename,
                warc_record_offset,
                warc_record_offset + warc_record_length - 1 as warc_record_end,
@@ -259,6 +259,7 @@ class Athena_lookup():
                             select url,
                             url_host_name,
                             url_host_registered_domain,
+                            url_host_tld,
                             warc_filename,
                             warc_record_offset,
                             warc_record_end,
@@ -272,6 +273,7 @@ class Athena_lookup():
             keyword_subpages_query = f"""(SELECT url,
                                 url_host_name,
                                 url_host_registered_domain,
+                                url_host_tld,
                                 warc_filename,
                                 warc_record_offset,
                                 warc_record_end,
@@ -285,10 +287,11 @@ class Athena_lookup():
 
         # form query
         if self.n_subpages and self.url_keywords:
-            query = f"""CREATE TABLE urls_merged_cc_to_download AS
+            query = f"""CREATE TABLE urls_merged_cc_to_download_unsorted AS
             SELECT url,
             url_host_name,
             url_host_registered_domain,
+            url_host_tld,
             warc_filename,
             warc_record_offset,
             warc_record_end,
@@ -297,22 +300,33 @@ class Athena_lookup():
             UNION 
             {keyword_subpages_query}"""
         elif self.n_subpages:
-            query = f"""CREATE TABLE urls_merged_cc_to_download AS
+            query = f"""CREATE TABLE urls_merged_cc_to_download_unsorted AS
             SELECT url,
             url_host_name,
             url_host_registered_domain,
+            url_host_tld,
             warc_filename,
             warc_record_offset,
             warc_record_end,
             crawl 
             FROM {shortest_subpages_query}"""
         elif self.url_keywords:
-            query = f"""CREATE TABLE urls_merged_cc_to_download AS
+            query = f"""CREATE TABLE urls_merged_cc_to_download_unsorted AS
             SELECT * FROM {keyword_subpages_query}"""
         else:
-            query = f"""CREATE TABLE urls_merged_cc_to_download AS
+            query = f"""CREATE TABLE urls_merged_cc_to_download_unsorted AS
             SELECT * FROM urls_merged_cc"""
 
+        self.execute_query(query)
+
+    def sort_download_table_by_tld(self):
+        """ Sorts the the download table by Top Level Domain (TLD) to make it more likely that all subpages
+        in a batch are using the same language (hence need to download fewer language models). Keeps the
+        crawl order intact."""
+        query = f"""CREATE TABLE urls_merged_cc_to_download AS
+        SELECT * FROM urls_merged_cc_to_download_unsorted
+        ORDER BY crawl, url_host_tld
+        """
         self.execute_query(query)
 
     def get_length_download_table(self):
@@ -348,6 +362,7 @@ class Athena_lookup():
             self.repair_ccindex_table()
         self.inner_join()
         self.select_subpages()
+        self.sort_download_table_by_tld()
         self.get_length_download_table()
         # self.save_table_as_csv()
         print(f'The results contain {self.download_table_length} subpages from {self.n_unique_hosts}'

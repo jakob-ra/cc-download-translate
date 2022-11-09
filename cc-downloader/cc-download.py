@@ -125,11 +125,13 @@ if __name__ == "__main__":
     df['translated_paragraphs'] = np.nan
     to_code = 'en'
     langs = ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']
-    langs = [l for l in df.lang.unique() if l in langs]
+    lang_counts = df.lang.value_counts(normalize=True)
+    nonrare_langs = lang_counts[lang_counts > 0.01].index.tolist()
+    langs = [l for l in nonrare_langs if l in langs]
     for from_code in langs:
-        # print(f'Downloading model {from_code}-{to_code}...')
-        # model_path = download_argos_model(from_code, to_code)
-        # install_argos_model(model_path)
+        print(f'Downloading model {from_code}-{to_code}...')
+        model_path = download_argos_model(from_code, to_code)
+        install_argos_model(model_path)
         print(f'Loading model {from_code}-{to_code}...')
         model = load_argos_model(from_code, to_code)
         print(f'Translating {len(df[df.lang == from_code])} paragraphs from {from_code} to {to_code}...')
