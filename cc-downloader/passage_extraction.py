@@ -23,12 +23,12 @@ class PassageExtractor:
         The maximum number of characters to extract.
     Examples
     --------
-    >>> text = 'This is a sentence. This is second sentence. This is a third sentence mentioning a
+    >>> text = 'This is a sentence This is second sentence! This is a third sentence mentioning a
     keyword. This is a fourth sentence. This is a fifth sentence. This is a sixth sentence.'
     >>> keywords = ['keyword']
     >>> extractor = PassageExtractor(text, keywords, n_sent_forward=2, n_sent_backward=1)
     >>> extractor.extract_relevant_passages()
-    ['This is a second sentence. This is a third sentence mentioning a keyword. This is a fourth sentence.
+    ['This is a second sentence! This is a third sentence mentioning a keyword. This is a fourth sentence.
     This is a fifth sentence.']
     """
 

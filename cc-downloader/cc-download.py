@@ -11,11 +11,11 @@ import os
 import json
 from textblob import TextBlob
 import nltk
-import requests
+from urllib.request import urlopen
 
 from passage_extraction import PassageExtractor
 from problem_classification import ProblemClassifier
-from utils import install_import, exponential_backoff
+from utils import *
 
 
 def fetch_process_warc_records(row, s3client, keywords):
@@ -49,22 +49,21 @@ def fetch_process_warc_records(row, s3client, keywords):
 
 
 if __name__ == "__main__":
-    print('Installing packages...')
-    for package in ['argostranslate', 'langdetect', 'textblob']:
-        install_import(package)
-    print('Packages installed.')
+    # print('Installing packages...')
+    # for package in ['argostranslate', 'langdetect']:
+    #     install_import(package)
+    # print('Packages installed.')
+    #
+    # # download textblob corpora
+    # print('Downloading textblob corpora...')
+    # os.system('python -m textblob.download_corpora lite')
+    # print('Corpora downloaded.')
+    #
+    # # download nltk corpora
+    # print('Downloading nltk corpora...')
+    # nltk.download('omw-1.4')
+    # print('nltk corpora downloaded.')
 
-    # download textblob corpora
-    print('Downloading textblob corpora...')
-    os.system('python -m textblob.download_corpora lite')
-    print('Corpora downloaded.')
-
-    # download nltk corpora
-    print('Downloading nltk corpora...')
-    nltk.download('omw-1.4')
-    print('nltk corpora downloaded.')
-
-    from utils import download_argos_model, install_argos_model, load_argos_model, argos_translate, detect_lang
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, required=True)
@@ -128,9 +127,9 @@ if __name__ == "__main__":
     langs = ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']
     langs = [l for l in df.lang.unique() if l in langs]
     for from_code in langs:
-        print(f'Downloading model {from_code}-{to_code}...')
-        model_path = download_argos_model(from_code, to_code)
-        install_argos_model(model_path)
+        # print(f'Downloading model {from_code}-{to_code}...')
+        # model_path = download_argos_model(from_code, to_code)
+        # install_argos_model(model_path)
         print(f'Loading model {from_code}-{to_code}...')
         model = load_argos_model(from_code, to_code)
         print(f'Translating {len(df[df.lang == from_code])} paragraphs from {from_code} to {to_code}...')
@@ -141,9 +140,7 @@ if __name__ == "__main__":
     # problem classification
     print('Starting problem classification...')
     start = time.process_time()
-    from urllib.request import urlopen
-    import json
-    with urlopen('https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.csv') as url:
+    with urlopen(args.topic_keywords_path) as url:
         topic_keywords = json.load(url)
     problem_classifier = ProblemClassifier(topic_keywords)
     df = pd.concat([df, df['translated_paragraphs'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)

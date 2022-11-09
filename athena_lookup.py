@@ -6,9 +6,47 @@ from utils import convert_file_size
 import boto3
 
 class Athena_lookup():
+    """ A class to query the Common Crawl index using Athena.
+
+    Parameters
+    ----------
+    aws_params : dict
+        Dictionary with the following keys:
+        - bucket: S3 bucket where the results will be stored
+        - path: S3 path where the results will be stored
+        - database: Athena database where the results will be stored
+    s3path_url_list : str
+        S3 path to the list of URLs to be queried (needs to be a folder with csv file(s) with one URL per line,
+        without a header, and the URLs without the protocol and subdomain, e.g.:
+            example1.com
+            example2.com
+    crawls : list
+        List of crawls to be queried
+    n_subpages : int
+        Number of subpages to be queried (selects the subpages with the shortest URL). If None, only the
+        subpages containing URL keywords will be queried.
+    url_keywords : list
+        List of keywords to be queried when selecting subpages (e.g. 'news' as a url keyword would select
+        'apple.com/news'. If None, only the n_subpages with the shortest URL will be queried.
+    limit_pages_url_keywords : int
+        Maximum number of pages to be queried when selecting subpages based on URL keywords. If None, all
+        such subpages will be queried.
+    athena_price_per_tb : float
+        Price per TB of data queried in Athena (see https://aws.amazon.com/athena/pricing/)
+    wait_seconds : int
+        Number of seconds to wait before query times out
+    limit_cc_table : int
+        Limit the number of rows in the ccindex table to keep costs low for debugging
+    keep_ccindex : bool
+        Keep the ccindex table after querying to speed up future queries
+
+    Returns
+    -------
+    Athena_lookup object
+    """
     def __init__(self, aws_params: dict, s3path_url_list, crawls: list, n_subpages: int, url_keywords: list,
-                 athena_price_per_tb=5, wait_seconds=3600, limit_cc_table=10000, keep_ccindex=False,
-                 limit_pages_url_keywords=100):
+                 limit_pages_url_keywords=100, athena_price_per_tb=5, wait_seconds=3600,
+                 limit_cc_table=10000, keep_ccindex=False):
         self.athena_client = boto3.client('athena')
         self.s3_client = boto3.client('s3')
         self.aws_params = aws_params
@@ -297,13 +335,10 @@ class Athena_lookup():
 
         self.input_table_length = pd.read_csv(input_table_length_location).values[0][0]
 
-
     # def save_table_as_csv(self):
     #     query = f"""SELECT * FROM cc_merged_to_download"""
     #
     #     self.download_table_location,_  = self.execute_query(query)
-
-
 
     def run_lookup(self):
         self.drop_all_tables()

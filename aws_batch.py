@@ -2,22 +2,42 @@ import boto3
 import time
 
 class AWSBatch:
-    def __init__(self, n_batches, batch_size, output_bucket, result_output_path, keywords_path, image_name,
-                 aws_role, retry_attempts=3, attempt_duration=1800,
-                 keep_compute_env=False, keep_job_queue=False):
+    """ A class to run AWS Batch jobs.
+    Parameters
+    ----------
+        n_batches (int): Number of batches to run.
+        batch_size (int): Number of paragraphs to process per batch.
+        output_bucket (str): Name of the S3 bucket to store the images.
+        result_output_path (str): Path to store the results in the S3 bucket.
+        keywords_path (str): Path to the keywords around which to extract the paragraphs.
+        topic_keywords_path (str): Path to the keywords used to classify different topics.
+        image_name (str): Name of the docker image to use.
+        aws_role (str): AWS role to use.
+        retry_attempts (int): Number of times to retry a failed job.
+        attempt_duration (int): Duration of each attempt in seconds.
+        keep_compute_env_job_queue (bool): Whether to keep the compute environment and job queue.
+        batch_env_name (str): Name of the compute environment, job queue, job definition and job.
+        vcpus (float): Number of vcpus to use per container. Possible values are 0.25, 0.5, 1, 2, 4.
+        memory (int): Amount of memory to use per container. Possible values: 512, 1024, 2048, 4096.
+    """
+    def __init__(self, n_batches, batch_size, output_bucket, result_output_path, keywords_path,
+                 topic_keywords_path, image_name, aws_role, retry_attempts=3, attempt_duration=1800,
+                 keep_compute_env_job_queue=False, batch_env_name='cc', vcpus=0.25, memory=512):
         self.n_batches = n_batches
         self.batch_size = batch_size
         self.output_bucket = output_bucket
         self.result_output_path = result_output_path
         self.keywords_path = keywords_path
+        self.topic_keywords_path = topic_keywords_path
         self.aws_role = aws_role
         self.retry_attempts = retry_attempts
-        self.batch_client = boto3.client('batch')
-        self.batch_env_name = 'cc'
         self.image_name = image_name
-        self.keep_compute_env = keep_compute_env
-        self.keep_job_queue = keep_job_queue
+        self.keep_compute_env_job_queue = keep_compute_env_job_queue
+        self.batch_env_name = batch_env_name
         self.attempt_duration = attempt_duration
+        self.vcpus = vcpus
+        self.memory = memory
+        self.batch_client = boto3.client('batch')
 
     def create_compute_environment_fargate(self):
         self.batch_client.create_compute_environment(
@@ -83,6 +103,7 @@ class AWSBatch:
                     f"--output_bucket={self.output_bucket}",
                     f"--result_output_path={self.result_output_path}",
                     f"--keywords_path={self.keywords_path}",
+                    f"--topic_keywords={self.topic_keywords_path}",
                 ],
                 'jobRoleArn': self.aws_role, #'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
                 'executionRoleArn':  self.aws_role, # 'arn:aws:iam::425352751544:role/ecsTaskExecutionRole',
@@ -113,10 +134,23 @@ class AWSBatch:
         )
         time.sleep(5)
 
+    def delete_compute_environment(self):
+        self.batch_client.delete_compute_environment(
+            computeEnvironment=self.batch_env_name,
+        )
+        time.sleep(10)
+
+    def delete_job_queue(self):
+        self.batch_client.delete_job_queue(
+            jobQueue=self.batch_env_name,
+        )
+        time.sleep(30)
+
     def run(self):
-        if not self.keep_compute_env:
+        if not self.keep_compute_env_job_queue:
+            self.delete_job_queue()
+            self.delete_compute_environment()
             self.create_compute_environment_fargate()
-        if not self.keep_job_queue:
             self.create_job_queue()
         self.register_job_definition()
         self.submit_job()

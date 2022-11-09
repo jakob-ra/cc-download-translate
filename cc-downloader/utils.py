@@ -2,12 +2,12 @@ from botocore.exceptions import ClientError
 import time
 import pandas as pd
 import urllib.request
-import argostranslate.package
-import argostranslate.translate
-from langdetect import detect
 import subprocess
 import sys
 import os
+import argostranslate.package
+import argostranslate.translate
+from langdetect import detect
 
 def exponential_backoff(func, *args, **kwargs):
     """Exponential backoff to deal with request limits"""
@@ -33,6 +33,7 @@ def install_import(package):
         print(e)
         install_package(package)
         __import__(package)
+
 
 def download_argos_model(from_code, to_code):
     argos_models = pd.read_json('https://github.com/argosopentech/argospm-index/raw/main/index.json')

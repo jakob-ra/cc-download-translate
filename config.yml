@@ -8,7 +8,7 @@ batch_role: 'arn:aws:iam::425352751544:role/cc-download' # role to use for the b
 s3path_url_list: 's3://cc-extract/dataprovider_all_months/only_urls/' # folder where url list is stored, starts with 's3://'
 keywords_path: 'https://github.com/jakob-ra/cc-download-translate/raw/main/keywords.csv' # kewywords to search for in the webpages
 url_keywords_path: 'https://github.com/jakob-ra/cc-download-translate/raw/main/url_keywords.csv' # additionally include subpages with these keywords in the url, specify None if not needed
-topic_keyowrds_path: 'https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.csv' # keywords to search for in the extracted passages to determine the topic
+topic_keywords_path: 'https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.json' # keywords to search for in the extracted passages to determine the topic
 # note that all keyword files have to accessible from the container so e.g. somewhere in s3 or github (not local)
 
 ## output paths
@@ -23,7 +23,7 @@ n_subpages_per_domain: 10 # maximum number of subpages to download per domain (d
 limit_pages_url_keywords: 100 # maximum number of subpages containing a keyword from the url keyword list to download per domain
 
 ## batch settings
-image_name: 'public.ecr.aws/r9v1u7o6/cc-download:latest' # docker image to use for the batch job
+image_name: 'public.ecr.aws/r9v1u7o6/cc-download-translate:latest' # docker image to use for the batch job
 batch_size: 100 # number of subpages to download per batch
 retry_attempts: 1 # number of times to retry a failed download batch
 attempt_duration: 1800 # duration in seconds to wait before retrying to download a batch

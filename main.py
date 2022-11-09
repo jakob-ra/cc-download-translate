@@ -14,7 +14,6 @@ if __name__ == '__main__':
 
     # available_crawls = pd.read_csv('common-crawls.txt')
 
-    ## run athena lookup
     result_output_path = cfg['result_output_path'] + '/' + '_'.join(cfg['crawls']) # path in output_bucket to store the downloads in batches
     aws_params = {
         'region': cfg['region'],
@@ -23,6 +22,8 @@ if __name__ == '__main__':
         'bucket': cfg['output_bucket'],
         'path': cfg['index_output_path'],
     }
+
+    ## run athena lookup
     url_keywords = pd.read_csv(cfg['url_keywords_path'], header=None, usecols=[0]).squeeze().tolist()
 
     answer = input(f'Estimated lookup costs: {0.2*len(cfg["crawls"]):.2f}$-{0.5*len(cfg["crawls"]):.2f} $. Continue? [y]/[n]').lower()
@@ -41,11 +42,17 @@ if __name__ == '__main__':
 
     if answer == 'y':
         aws_batch = AWSBatch(req_batches, cfg["batch_size"], cfg['output_bucket'], result_output_path,
-                             cfg['keywords_path'], cfg['image_name'], cfg['batch_role'], retry_attempts=cfg['retry_attempts'],
-                             attempt_duration=cfg['attempt_duration'], keep_compute_env=True, keep_job_queue=True)
+                             cfg['keywords_path'], cfg['topic_keywords_path'], cfg['image_name'],
+                             cfg['batch_role'], retry_attempts=cfg['retry_attempts'],
+                             attempt_duration=cfg['attempt_duration'], keep_compute_env=True,
+                             keep_job_queue=True)
         aws_batch.run()
     else:
         raise Exception('Download batch job aborted.')
+
+
+
+
 
 
 
