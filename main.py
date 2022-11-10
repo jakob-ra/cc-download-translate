@@ -29,7 +29,7 @@ if __name__ == '__main__':
     answer = input(f'Estimated lookup costs: {0.2*len(cfg["crawls"]):.2f}$-{0.5*len(cfg["crawls"]):.2f} $. Continue? [y]/[n]').lower()
     if answer == 'y':
         athena_lookup = Athena_lookup(aws_params, cfg['s3path_url_list'], cfg['crawls'],
-                                      cfg['n_subpages_per_domain'], url_keywords, limit_cc_table=100000,
+                                      cfg['n_subpages_per_domain'], url_keywords, limit_cc_table=None,
                                       keep_ccindex=True, limit_pages_url_keywords=cfg['limit_pages_url_keywords'])
         athena_lookup.run_lookup()
     else:

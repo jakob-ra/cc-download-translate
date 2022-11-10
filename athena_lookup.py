@@ -171,6 +171,8 @@ class Athena_lookup():
             self.execute_query(query)
         query = f"""DROP TABLE IF EXISTS urls_merged_cc;"""
         self.execute_query(query)
+        query = f"""DROP TABLE IF EXISTS urls_merged_cc_to_download_unsorted;"""
+        self.execute_query(query)
         query = f"""DROP TABLE IF EXISTS urls_merged_cc_to_download;"""
         self.execute_query(query)
 

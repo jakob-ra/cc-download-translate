@@ -158,13 +158,15 @@ if __name__ == "__main__":
     with urlopen(args.topic_keywords_path) as url:
         topic_keywords = json.load(url)
     problem_classifier = ProblemClassifier(topic_keywords)
-    df = pd.concat([df, df['translated_paragraphs'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
+    df = pd.concat([df, df['paragraph'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
+    # df = pd.concat([df, df['translated_paragraphs'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
     print(f'Success! Finished problem classification in {time.process_time() - start} seconds.')
 
     # sentiment analysis
     print('Starting sentiment analysis...')
     start = time.process_time()
-    df['sentiment'] = df.translated_paragraphs.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
+    df['sentiment'] = df.paragraph.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
+    # df['sentiment'] = df.translated_paragraphs.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
     print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
     # save to S3
