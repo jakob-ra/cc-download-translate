@@ -54,9 +54,6 @@ if __name__ == '__main__':
 
 
 
-
-
-
 ## read results
 df = pd.concat([pd.read_csv(f's3://{output_bucket}/{result_output_path}/batch_n_{i}.csv') for i in range(req_batches)])
 

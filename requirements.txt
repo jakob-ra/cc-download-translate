@@ -9,5 +9,4 @@ awswrangler~=2.17.0
 pyyaml
 textblob
 nltk
-argostranslate
 langdetect

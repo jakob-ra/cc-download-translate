@@ -6,11 +6,9 @@ from io import BytesIO
 from bs4 import BeautifulSoup, SoupStrainer
 import argparse
 import awswrangler as wr
-import numpy as np
 import os
 import json
 from textblob import TextBlob
-import nltk
 from urllib.request import urlopen
 
 from passage_extraction import PassageExtractor
@@ -101,13 +99,17 @@ if __name__ == "__main__":
     start = time.process_time()
     df['paragraphs'] = df.apply(lambda row: fetch_process_warc_records(row, s3client, keywords), axis=1)
     print(f'Success! Finished downloading in {time.process_time() - start} seconds.')
-    print(f'Share of domains mentioning at least one keyword: {df.groupby("url_host_registered_domain").paragraphs.apply(lambda x: len(x[x.str.len()>0])).mean()}')
+    print(f'Share of domains mentioning at least one keyword: {df.groupby("url_host_registered_domain").paragraphs.apply(lambda x: len(x[x.str.len()>0]) > 0).mean()}')
     print(f'Share of subpages mentioning at least one keyword: {len(df.paragraphs[df.paragraphs.str.len()>0])/len(df)}')
 
     # drop offsets
     df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
 
-    # drop pages without any paragraphs
+    # save domains without any mentions of keywords
+    domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'crawl']]
+    domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/domains_without_mentions_{batch_n}.csv', index=False)
+
+    # continue with non-empty domains
     df = df[df.paragraphs.str.len() > 0].copy(deep=True)
 
     # detect language on first characters of first paragraph
@@ -118,26 +120,37 @@ if __name__ == "__main__":
 
     # explode so we have one paragraph per row
     df = df.explode('paragraphs')
+    df.reset_index(drop=True, inplace=True)
+    df.rename(columns={'paragraphs': 'paragraph'}, inplace=True)
+    df['paragraph'] = df.paragraph.str.strip()
+    df = df[df.paragraph.str.len() > 20].copy(deep=True) # drop very short paragraphs
+
+    # save non-english pages to S3
+    non_english = df[df.lang != 'en']
+    non_english.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/non_english/non_english_{batch_n}.csv', index=False)
+
+    # continue with english pages
+    df = df[df.lang == 'en'].copy(deep=True)
 
     # translation
-    print('Starting translation...')
-    start = time.process_time()
-    df['translated_paragraphs'] = np.nan
-    to_code = 'en'
-    langs = ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']
-    lang_counts = df.lang.value_counts(normalize=True)
-    nonrare_langs = lang_counts[lang_counts > 0.01].index.tolist()
-    langs = [l for l in nonrare_langs if l in langs]
-    for from_code in langs:
-        print(f'Downloading model {from_code}-{to_code}...')
-        model_path = download_argos_model(from_code, to_code)
-        install_argos_model(model_path)
-        print(f'Loading model {from_code}-{to_code}...')
-        model = load_argos_model(from_code, to_code)
-        print(f'Translating {len(df[df.lang == from_code])} paragraphs from {from_code} to {to_code}...')
-        df.loc[df.lang == from_code, 'translated_paragraphs'] = df[df.lang == from_code].paragraphs.apply(lambda text: argos_translate(model, text))
-    df['translated_paragraphs'] = df.translated_paragraphs.astype(str).str.strip()
-    print(f'Success! Finished translation in {time.process_time() - start} seconds.')
+    # print('Starting translation...')
+    # start = time.process_time()
+    # df['translated_paragraphs'] = np.nan
+    # to_code = 'en'
+    # langs = ['de', 'es', 'nl', 'fr', 'pt', 'it', 'ja', 'ru', 'id', 'sv', 'pl']
+    # lang_counts = df.lang.value_counts(normalize=True)
+    # nonrare_langs = lang_counts[lang_counts > 0.01].index.tolist()
+    # langs = [l for l in nonrare_langs if l in langs]
+    # for from_code in langs:
+    #     print(f'Downloading model {from_code}-{to_code}...')
+    #     model_path = download_argos_model(from_code, to_code)
+    #     install_argos_model(model_path)
+    #     print(f'Loading model {from_code}-{to_code}...')
+    #     model = load_argos_model(from_code, to_code)
+    #     print(f'Translating {len(df[df.lang == from_code])} paragraphs from {from_code} to {to_code}...')
+    #     df.loc[df.lang == from_code, 'translated_paragraphs'] = df[df.lang == from_code].paragraphs.apply(lambda text: argos_translate(model, text))
+    # df['translated_paragraphs'] = df.translated_paragraphs.astype(str).str.strip()
+    # print(f'Success! Finished translation in {time.process_time() - start} seconds.')
 
     # problem classification
     print('Starting problem classification...')
@@ -155,7 +168,7 @@ if __name__ == "__main__":
     print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
     # save to S3
-    s3_path = f's3://{args.output_bucket}/{args.result_output_path}/batch_n_{batch_n}.csv'
+    s3_path = f's3://{args.output_bucket}/{args.result_output_path}/english/batch_n_{batch_n}.csv'
     df.to_csv(s3_path, index=False)
     print(f'Results saved to: {s3_path}')
 
