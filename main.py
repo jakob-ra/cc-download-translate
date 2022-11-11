@@ -14,6 +14,7 @@ if __name__ == '__main__':
 
     # available_crawls = pd.read_csv('common-crawls.txt')
 
+    crawl_dates = ['-'.join(crawl.split('-')[-2:]) for crawl in cfg['crawls']]
     result_output_path = cfg['result_output_path'] + '/' + '_'.join(cfg['crawls']) # path in output_bucket to store the downloads in batches
     aws_params = {
         'region': cfg['region'],
@@ -37,11 +38,11 @@ if __name__ == '__main__':
 
     ## run batch job
     req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
-    print(f'Splitting {athena_lookup.download_table_length} subpages into {req_batches} batches of size {cfg["batch_size"]}.')
+    print(f'Splitting {athena_lookup.download_table_length:,} subpages into {req_batches:,} batches of size {cfg["batch_size"]:,}.')
     answer = input(f'Estimated download costs: {0.33*athena_lookup.download_table_length*10**-6:.2f}$. Continue? [y]/[n]').lower()
 
     if answer == 'y':
-        aws_batch = AWSBatch(2, cfg["batch_size"], cfg['output_bucket'], result_output_path,
+        aws_batch = AWSBatch(req_batches, cfg["batch_size"], cfg['output_bucket'], result_output_path,
                              cfg['keywords_path'], cfg['topic_keywords_path'], cfg['image_name'],
                              cfg['batch_role'], retry_attempts=cfg['retry_attempts'],
                              attempt_duration=cfg['attempt_duration'], keep_compute_env_job_queue=True,

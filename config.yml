@@ -18,14 +18,17 @@ result_output_path: 'cc-download-problems-sentiment' # path in output_bucket to 
 
 ## download settings
 crawls: # crawls to include (can be multiple), for list see https://commoncrawl.org/the-data/get-started/
-  - 'CC-MAIN-2020-16'
+  - 'CC-MAIN-2020-45'
+  - 'CC-MAIN-2020-50'
+  - 'CC-MAIN-2021-04'
+
 n_subpages_per_domain: 10 # maximum number of subpages to download per domain (downloads the n_subpages_per_domain subpages with the shortest url)
 limit_pages_url_keywords: 100 # maximum number of subpages containing a keyword from the url keyword list to download per domain
 
 ## batch settings
 image_name: 'public.ecr.aws/r9v1u7o6/cc-download-translate:latest' # docker image to use for the batch job
-batch_size: 100000 # number of subpages to download per batch
-retry_attempts: 1 # number of times to retry a failed download batch
+batch_size: 10000 # number of subpages to download per batch
+retry_attempts: 3 # number of times to retry a failed download batch
 attempt_duration: 4000 # duration in seconds to wait before retrying to download a batch
 vcpus: 0.25 # number of vcpus per container, possible values: 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256
 memory: 512 # memory in MB per container, possible values: 512, 1024, 2048, 4096, 8192
