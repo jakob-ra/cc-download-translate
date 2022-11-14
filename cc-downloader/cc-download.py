@@ -106,7 +106,7 @@ if __name__ == "__main__":
     df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
 
     # save domains without any mentions of keywords
-    domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'crawl']]
+    domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'crawl', 'fetch_time']]
     domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/domains_without_mentions_{batch_n}.csv', index=False)
 
     # continue with non-empty domains
