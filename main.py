@@ -49,6 +49,7 @@ if __name__ == '__main__':
                              vcpus=cfg['vcpus'], memory=cfg['memory'],
                              )
         aws_batch.run()
+        print('Batch job submitted.')
     else:
         raise Exception('Download batch job aborted.')
 
