@@ -117,7 +117,7 @@ if __name__ == "__main__":
 
     # save domains without any mentions of keywords
     domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'crawl', 'fetch_time']]
-    domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/crawls_name_{batch_n}.csv',
+    domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/{crawls_name}_{batch_n}.csv',
                                     index=False,
                                     lineterminator='\n')
 
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     # save non-english pages to S3
     non_english = df[df.lang != 'en']
-    non_english.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/non_english/crawls_name_{batch_n}.csv',
+    non_english.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/non_english/{crawls_name}_{batch_n}.csv',
                        index=False,
                        lineterminator='\n')
 
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
     # save to S3
-    df.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/english/crawls_name_{batch_n}.csv',
+    df.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/english/{crawls_name}_{batch_n}.csv',
               index=False,
               lineterminator='\n')
 
