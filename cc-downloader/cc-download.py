@@ -64,12 +64,16 @@ if __name__ == "__main__":
 
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", type=int, required=True)
+    # parser.add_argument("--batch_size", type=int, required=True)
     parser.add_argument("--output_bucket", type=str, required=True)
     parser.add_argument("--result_output_path", type=str, required=True)
     parser.add_argument("--keywords_path", type=str, required=True) # default='https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv')
     parser.add_argument("--topic_keywords_path", type=str, required=True)
     args = parser.parse_args()
+
+    if args.partitioned:
+        assert args.partition is not None, 'If partitioned=True, partition must be provided.'
+        assert args.partition_size is not None, 'If partitioned=True, partition_size must be provided.'
 
     keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
 
@@ -87,7 +91,9 @@ if __name__ == "__main__":
     print(sts.get_caller_identity())
 
     # read cc-index table with warc filenames and byte positions
-    query = f'SELECT * FROM urls_merged_cc_to_download OFFSET {batch_n} LIMIT {args.batch_size} '
+    # query = f'SELECT * FROM urls_merged_cc_to_download OFFSET {batch_n*args.batch_size} LIMIT {args.batch_size} '
+    query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={batch_n}'
+
     df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
     assert len(df) > 1, "Empty input table!"
 
