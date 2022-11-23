@@ -25,7 +25,7 @@ RUN python -c "import nltk; nltk.download('omw-1.4')"
 
 ## to push the dockerfile to Amazon Elastic Container Registry:
 # start docker daemon
-# docker build -t cc-download .
+# docker build -t public.ecr.aws/r9v1u7o6/cc-download-translate:latest .
 # docker tag cc-download:latest public.ecr.aws/r9v1u7o6/cc-download:latest
 # docker tag cc-download:latest public.ecr.aws/r9v1u7o6/cc-download-translate:latest
 # aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws

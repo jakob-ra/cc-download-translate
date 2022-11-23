@@ -64,16 +64,13 @@ if __name__ == "__main__":
 
 
     parser = argparse.ArgumentParser()
-    # parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--batch_size", type=int, required=True)
+    parser.add_argument("--batches_per_partition", type=int, required=True)
     parser.add_argument("--output_bucket", type=str, required=True)
     parser.add_argument("--result_output_path", type=str, required=True)
     parser.add_argument("--keywords_path", type=str, required=True) # default='https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv')
     parser.add_argument("--topic_keywords_path", type=str, required=True)
     args = parser.parse_args()
-
-    if args.partitioned:
-        assert args.partition is not None, 'If partitioned=True, partition must be provided.'
-        assert args.partition_size is not None, 'If partitioned=True, partition_size must be provided.'
 
     keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
 
@@ -91,11 +88,18 @@ if __name__ == "__main__":
     print(sts.get_caller_identity())
 
     # read cc-index table with warc filenames and byte positions
-    # query = f'SELECT * FROM urls_merged_cc_to_download OFFSET {batch_n*args.batch_size} LIMIT {args.batch_size} '
-    query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={batch_n}'
+    partition_n = batch_n//args.batches_per_partition + 1
+    batch_n_within_partition = batch_n%args.batches_per_partition
+    query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={partition_n} ORDER BY crawl, url_host_tld, fetch_time OFFSET {batch_n_within_partition*args.batch_size} LIMIT {args.batch_size} '
+    # query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={batch_n+1}' # +1 because partitions start at 1 not 0
 
     df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
     assert len(df) > 1, "Empty input table!"
+
+    # get unique crawl ids
+    crawl_ids = df.crawl.unique()
+    crawl_dates = ['-'.join(crawl.split('-')[-2:]) for crawl in crawl_ids]
+    crawls_name = '_'.join(crawl_dates)
 
     # initialize s3
     s3client = boto3.client('s3', region_name='us-east-1', use_ssl=False)
@@ -113,7 +117,9 @@ if __name__ == "__main__":
 
     # save domains without any mentions of keywords
     domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'crawl', 'fetch_time']]
-    domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/domains_without_mentions_{batch_n}.csv', index=False)
+    domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/crawls_name_{batch_n}.csv',
+                                    index=False,
+                                    lineterminator='\n')
 
     # continue with non-empty domains
     df = df[df.paragraphs.str.len() > 0].copy(deep=True)
@@ -133,7 +139,9 @@ if __name__ == "__main__":
 
     # save non-english pages to S3
     non_english = df[df.lang != 'en']
-    non_english.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/non_english/non_english_{batch_n}.csv', index=False)
+    non_english.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/non_english/crawls_name_{batch_n}.csv',
+                       index=False,
+                       lineterminator='\n')
 
     # continue with english pages
     df = df[df.lang == 'en'].copy(deep=True)
@@ -176,9 +184,9 @@ if __name__ == "__main__":
     print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
     # save to S3
-    s3_path = f's3://{args.output_bucket}/{args.result_output_path}/english/batch_n_{batch_n}.csv'
-    df.to_csv(s3_path, index=False)
-    print(f'Results saved to: {s3_path}')
+    df.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/english/crawls_name_{batch_n}.csv',
+              index=False,
+              lineterminator='\n')
 
 
 

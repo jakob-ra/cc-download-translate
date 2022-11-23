@@ -5,7 +5,9 @@ class AWSBatch:
     """ A class to run AWS Batch jobs.
     Parameters
     ----------
-        n_batches (int): Number of batches to run. Each batch will be run in parallel.
+        req_batches (int): Number of batches to run.
+        batch_size (int): Size of each batch.
+        batches_per_partition (int): Number of batches to run per partition.
         output_bucket (str): Name of the S3 bucket to store the images.
         result_output_path (str): Path to store the results in the S3 bucket.
         keywords_path (str): Path to the keywords around which to extract the paragraphs.
@@ -19,10 +21,12 @@ class AWSBatch:
         vcpus (float): Number of vcpus to use per container. Possible values are 0.25, 0.5, 1, 2, 4.
         memory (int): Amount of memory to use per container. Possible values: 512, 1024, 2048, 4096.
     """
-    def __init__(self, n_batches, output_bucket, result_output_path, keywords_path,
+    def __init__(self, req_batches, batch_size, batches_per_partition, output_bucket, result_output_path, keywords_path,
                  topic_keywords_path, image_name, aws_role, retry_attempts=3, attempt_duration=1800,
                  keep_compute_env_job_queue=False, batch_env_name='cc', vcpus=0.25, memory=512):
-        self.n_batches = n_batches
+        self.req_batches = req_batches
+        self.batch_size = batch_size
+        self.batches_per_partition = batches_per_partition
         self.output_bucket = output_bucket
         self.result_output_path = result_output_path
         self.keywords_path = keywords_path
@@ -44,7 +48,7 @@ class AWSBatch:
         state='ENABLED',
         computeResources={
             'type': 'FARGATE_SPOT',
-            'maxvCpus': self.n_batches,
+            'maxvCpus': self.req_batches,
             'subnets': [
                 'subnet-3fc5e11e',
                 'subnet-96402da7',
@@ -97,7 +101,8 @@ class AWSBatch:
                 'command': [
                     "python3",
                     "cc-download.py",
-                    # f"--batch_size={self.batch_size}",
+                    f"--batch_size={self.batch_size}",
+                    f"--batches_per_partition={self.batches_per_partition}",
                     f"--output_bucket={self.output_bucket}",
                     f"--result_output_path={self.result_output_path}",
                     f"--keywords_path={self.keywords_path}",
@@ -126,7 +131,7 @@ class AWSBatch:
             jobName=self.batch_env_name,
             jobQueue=self.batch_env_name,
             arrayProperties={
-                'size': self.n_batches,
+                'size': self.req_batches,
             },
             jobDefinition=self.batch_env_name,
         )

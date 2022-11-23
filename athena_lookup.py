@@ -9,8 +9,6 @@ class Athena_lookup():
 
     Parameters
     ----------
-    n_batches : int
-        Number of batches to divide the download table into. Max is 100.
     aws_params : dict
         Dictionary with the following keys:
         - bucket: S3 bucket where the results will be stored
@@ -45,10 +43,9 @@ class Athena_lookup():
     -------
     Athena_lookup object
     """
-    def __init__(self, n_batches, aws_params: dict, s3path_url_list, crawls: list, n_subpages: int, url_keywords: list,
+    def __init__(self, aws_params: dict, s3path_url_list, crawls: list, n_subpages: int, url_keywords: list,
                  limit_pages_url_keywords=100, athena_price_per_tb=5, wait_seconds=3600,
                  limit_cc_table=10000, keep_ccindex=False):
-        self.n_batches = n_batches
         self.athena_client = boto3.client('athena')
         self.s3_client = boto3.client('s3')
         self.aws_params = aws_params
@@ -337,18 +334,19 @@ class Athena_lookup():
         crawl order intact."""
         query = f"""CREATE TABLE urls_merged_cc_to_download_unpartitioned AS
         SELECT * FROM urls_merged_cc_to_download_unsorted
-        ORDER BY crawl, url_host_tld"""
+        ORDER BY crawl, url_host_tld, fetch_time"""
 
         self.execute_query(query)
 
     def partition_download_table(self):
-        """Partitions the download table into batches of size self.batch_size"""
+        """Partitions the download table into 100 partitions (this is the maximum and makes querying the table faster)"""
         query = f"""CREATE TABLE urls_merged_cc_to_download
         WITH (partitioned_by = ARRAY['partition']) AS
-        SELECT urls_merged_cc_to_download.*, ntile({self.n_batches}) over (order by null) as partition
+        SELECT urls_merged_cc_to_download_unpartitioned.*, ntile(100) over (order by null) as partition
         from urls_merged_cc_to_download_unpartitioned;"""
 
         self.execute_query(query)
+
 
     def get_length_download_table(self):
         query = f"""SELECT COUNT(*) FROM urls_merged_cc_to_download"""
@@ -370,6 +368,13 @@ class Athena_lookup():
 
         self.input_table_length = pd.read_csv(input_table_length_location).values[0][0]
 
+        # find number of rows per partition
+        query = f"""SELECT COUNT(*) FROM urls_merged_cc_to_download GROUP BY partition"""
+
+        partition_length_location, _ = self.execute_query(query)
+
+        self.partition_length = pd.read_csv(partition_length_location).values[0][0]
+
     # def save_table_as_csv(self):
     #     query = f"""SELECT * FROM cc_merged_to_download"""
     #
@@ -388,9 +393,9 @@ class Athena_lookup():
         self.partition_download_table()
         self.get_length_download_table()
         # self.save_table_as_csv()
-        print(f'The results contain {self.download_table_length} subpages from {self.n_unique_hosts}'
+        print(f'The results contain {self.download_table_length:,} subpages from {self.n_unique_hosts:,}'
               f' unique hostnames.')
-        print(f'Matched {self.n_unique_hosts/self.input_table_length} of the input domains to at least one subpage.')
+        print(f'Matched {self.n_unique_hosts/self.input_table_length:2f} of the input domains to at least one subpage.')
 
 
 
