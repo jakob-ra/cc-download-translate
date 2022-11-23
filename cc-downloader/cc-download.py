@@ -15,6 +15,9 @@ from passage_extraction import PassageExtractor
 from problem_classification import ProblemClassifier
 from utils import *
 
+# def replace_newlines(text):
+#     """ Replace newlines with paragraph tags """
+#     return text.replace('\n', '<p>')
 
 def fetch_process_warc_records(row, s3client, keywords):
     """Fetch all WARC records defined by filenames and offsets in batch,
@@ -43,6 +46,7 @@ def fetch_process_warc_records(row, s3client, keywords):
         extracts += extractor.extract_relevant_passages()
 
     return list(set(extracts)) # remove duplicates
+    # return list(set([replace_newlines(extract) for extract in extracts])) # remove duplicates and replace newlines
 
 
 
@@ -90,7 +94,7 @@ if __name__ == "__main__":
     # read cc-index table with warc filenames and byte positions
     partition_n = batch_n//args.batches_per_partition + 1
     batch_n_within_partition = batch_n%args.batches_per_partition
-    query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={partition_n} ORDER BY crawl, url_host_tld, fetch_time OFFSET {batch_n_within_partition*args.batch_size} LIMIT {args.batch_size} '
+    query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={partition_n} ORDER BY crawl, url_host_tld, fetch_time OFFSET {batch_n_within_partition*args.batch_size} LIMIT {args.batch_size}'
     # query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={batch_n+1}' # +1 because partitions start at 1 not 0
 
     df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
@@ -117,9 +121,11 @@ if __name__ == "__main__":
 
     # save domains without any mentions of keywords
     domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'crawl', 'fetch_time']]
-    domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/{crawls_name}_{batch_n}.csv',
-                                    index=False,
-                                    lineterminator='\n')
+    # domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/{crawls_name}_{batch_n}.csv',
+    #                                 index=False,
+    #                                 lineterminator='\n')
+    s3path = f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/{crawls_name}_{batch_n}.parquet'
+    wr.s3.to_parquet(df=domains_without_mentions, path=s3path, index=False, compression='gzip')
 
     # continue with non-empty domains
     df = df[df.paragraphs.str.len() > 0].copy(deep=True)
@@ -142,6 +148,9 @@ if __name__ == "__main__":
     non_english.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/non_english/{crawls_name}_{batch_n}.csv',
                        index=False,
                        lineterminator='\n')
+
+    s3path = f's3://{args.output_bucket}/{args.result_output_path}/non_english/{crawls_name}_{batch_n}.parquet'
+    wr.s3.to_parquet(df=non_english, path=s3path, index=False, compression='gzip')
 
     # continue with english pages
     df = df[df.lang == 'en'].copy(deep=True)
@@ -183,10 +192,8 @@ if __name__ == "__main__":
     # df['sentiment'] = df.translated_paragraphs.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
     print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
-    # save to S3
-    df.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/english/{crawls_name}_{batch_n}.csv',
-              index=False,
-              lineterminator='\n')
+    s3path = f's3://{args.output_bucket}/{args.result_output_path}/english/{crawls_name}_{batch_n}.parquet'
+    wr.s3.to_parquet(df=df, path=s3path, index=False, compression='gzip')
 
 
 

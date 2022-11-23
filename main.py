@@ -38,6 +38,7 @@ if __name__ == '__main__':
         raise Exception('Lookup aborted.')
 
     ## run batch job
+    athena_lookup.partition_length = 304820
     batches_per_partition = athena_lookup.partition_length//cfg["batch_size"] + 1
     req_batches = batches_per_partition*100 # 100 is the number of partitions
     # req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)

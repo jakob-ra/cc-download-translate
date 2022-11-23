@@ -31,7 +31,7 @@ limit_pages_url_keywords: 100 # maximum number of subpages containing a keyword 
 ## batch settings
 image_name: 'public.ecr.aws/r9v1u7o6/cc-download-translate:latest' # docker image to use for the batch job
 batch_size: 10000 # number of subpages to download per batch
-retry_attempts: 1 # number of times to retry a failed download batch
+retry_attempts: 3 # number of times to retry a failed download batch
 attempt_duration: 4000 # duration in seconds to wait before retrying to download a batch
 vcpus: 0.25 # number of vcpus per container, possible values: 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256
 memory: 512 # memory in MB per container, possible values: 512, 1024, 2048, 4096, 8192
