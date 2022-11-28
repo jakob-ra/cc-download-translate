@@ -38,9 +38,8 @@ if __name__ == '__main__':
         raise Exception('Lookup aborted.')
 
     ## run batch job
-    athena_lookup.partition_length = 304820
     batches_per_partition = athena_lookup.partition_length//cfg["batch_size"] + 1
-    req_batches = batches_per_partition*100 # 100 is the number of partitions
+    req_batches = int(batches_per_partition*100) # 100 is the number of partitions
     # req_batches = int(athena_lookup.download_table_length//cfg["batch_size"] + 1)
     print(f'Splitting {athena_lookup.download_table_length:,} subpages into {req_batches:,} batches of size {cfg["batch_size"]:,}.')
     # print(f'Splitting {athena_lookup.download_table_length:,} subpages into {cfg["n_batches"]} batches of size {athena_lookup.download_table_length//100}.')
@@ -60,81 +59,81 @@ if __name__ == '__main__':
 
 
 
-## read results
-df = pd.concat([pd.read_csv(f's3://{output_bucket}/{result_output_path}/batch_n_{i}.csv') for i in range(req_batches)])
-
-df = pd.concat([pd.read_csv(f's3://{output_bucket}/cc-download/CC-MAIN-2020-24/batch_n_{i}.csv') for i in range(40)])
-
-# df = pd.read_csv(f's3://{output_bucket}/cc-download/CC-MAIN-2020-16/batch_n_{0}.csv')
-
-from ast import literal_eval
-df['paragraphs'] = df.paragraphs.apply(literal_eval)
-df = df.explode('paragraphs')
-df['paragraphs'] = df.paragraphs.str.strip()
-df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
-
-
-
-## detect language
-from langdetect import detect
-def detect_lang(text: str) -> str:
-    try:
-        return detect(text)
-    except:
-        return None
-
-df['lang'] = df.paragraphs.str[:50].apply(detect_lang)
-
-
-
-## Descriptives language distribution
-lang_counts = df.lang.value_counts().to_frame(name='count')
-lang_counts['share'] = lang_counts/lang_counts.sum()
-lang_counts['cum_share'] = lang_counts.share.cumsum()
-
-lang_codes = pd.read_csv('/Users/Jakob/Downloads/language-codes.csv', names=['lang', 'language'])
-lang_codes = lang_codes.append({'lang': 'zh-cn', 'language': 'Chinese'}, ignore_index=True)
-lang_counts = lang_counts.reset_index(names='lang').merge(lang_codes, on='lang', how='left')
-lang_counts = lang_counts.merge(argos_models, left_on='lang', right_on='from_code', how='left')
-lang_counts = lang_counts.iloc[1:] # remove english
-
-import matplotlib.pyplot as plt
-import numpy as np
-fig, ax = plt.subplots(figsize=(14,6))
-lang_counts.share.plot(ax=ax, kind='bar', color='grey')
-ax.set_xticklabels(lang_counts.language, rotation=45, ha='right')
-for i in range(len(lang_counts)):
-    if np.isnan(lang_counts.package_version.iloc[i]):
-        ax.get_xticklabels()[i].set_color("red")
-plt.grid()
-plt.tight_layout()
-plt.show()
-
-lang_counts
-ax.get_xticklabels()
-
-lang_counts.head(12) # take top 12 languages, 95% of content
-
-
-import argostranslate.translate
-
-def load_argos_model(from_code, to_code):
-    installed_languages = argostranslate.translate.get_installed_languages()
-    from_lang = list(filter(lambda x: x.code == from_code, installed_languages))[0]
-    to_lang = list(filter(lambda x: x.code == to_code, installed_languages))[0]
-    model = from_lang.get_translation(to_lang)
-
-    return model
-
-def argos_translate(model, text):
-    try:
-        return model.translate(text)
-    except:
-        return None
-
-model = load_argos_model(from_code, to_code)
-df['translated'] = None
-df[df.lang == 'de'].paragraphs.iloc[:100].apply(lambda x: argos_translate(model, x))
-
-model.translate()
+# ## read results
+# df = pd.concat([pd.read_csv(f's3://{output_bucket}/{result_output_path}/batch_n_{i}.csv') for i in range(req_batches)])
+#
+# df = pd.concat([pd.read_csv(f's3://{output_bucket}/cc-download/CC-MAIN-2020-24/batch_n_{i}.csv') for i in range(40)])
+#
+# # df = pd.read_csv(f's3://{output_bucket}/cc-download/CC-MAIN-2020-16/batch_n_{0}.csv')
+#
+# from ast import literal_eval
+# df['paragraphs'] = df.paragraphs.apply(literal_eval)
+# df = df.explode('paragraphs')
+# df['paragraphs'] = df.paragraphs.str.strip()
+# df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
+#
+#
+#
+# ## detect language
+# from langdetect import detect
+# def detect_lang(text: str) -> str:
+#     try:
+#         return detect(text)
+#     except:
+#         return None
+#
+# df['lang'] = df.paragraphs.str[:50].apply(detect_lang)
+#
+#
+#
+# ## Descriptives language distribution
+# lang_counts = df.lang.value_counts().to_frame(name='count')
+# lang_counts['share'] = lang_counts/lang_counts.sum()
+# lang_counts['cum_share'] = lang_counts.share.cumsum()
+#
+# lang_codes = pd.read_csv('/Users/Jakob/Downloads/language-codes.csv', names=['lang', 'language'])
+# lang_codes = lang_codes.append({'lang': 'zh-cn', 'language': 'Chinese'}, ignore_index=True)
+# lang_counts = lang_counts.reset_index(names='lang').merge(lang_codes, on='lang', how='left')
+# lang_counts = lang_counts.merge(argos_models, left_on='lang', right_on='from_code', how='left')
+# lang_counts = lang_counts.iloc[1:] # remove english
+#
+# import matplotlib.pyplot as plt
+# import numpy as np
+# fig, ax = plt.subplots(figsize=(14,6))
+# lang_counts.share.plot(ax=ax, kind='bar', color='grey')
+# ax.set_xticklabels(lang_counts.language, rotation=45, ha='right')
+# for i in range(len(lang_counts)):
+#     if np.isnan(lang_counts.package_version.iloc[i]):
+#         ax.get_xticklabels()[i].set_color("red")
+# plt.grid()
+# plt.tight_layout()
+# plt.show()
+#
+# lang_counts
+# ax.get_xticklabels()
+#
+# lang_counts.head(12) # take top 12 languages, 95% of content
+#
+#
+# import argostranslate.translate
+#
+# def load_argos_model(from_code, to_code):
+#     installed_languages = argostranslate.translate.get_installed_languages()
+#     from_lang = list(filter(lambda x: x.code == from_code, installed_languages))[0]
+#     to_lang = list(filter(lambda x: x.code == to_code, installed_languages))[0]
+#     model = from_lang.get_translation(to_lang)
+#
+#     return model
+#
+# def argos_translate(model, text):
+#     try:
+#         return model.translate(text)
+#     except:
+#         return None
+#
+# model = load_argos_model(from_code, to_code)
+# df['translated'] = None
+# df[df.lang == 'de'].paragraphs.iloc[:100].apply(lambda x: argos_translate(model, x))
+#
+# model.translate()
 

@@ -1,5 +1,6 @@
 import re
 import numpy as np
+import nltk
 
 class PassageExtractor:
     """ Extracts passages around keyword mentions.
@@ -60,7 +61,8 @@ class PassageExtractor:
 
     def extract_sentences_around_keyword_mention(self) -> list:
         sentence_boundary = '(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|!)\s'
-        sentences = re.split(sentence_boundary, self.text)
+        # sentences = re.split(sentence_boundary, self.text)
+        sentences = nltk.sent_tokenize(self.text)
         intervals = []
         for index, sentence in enumerate(sentences):
             for keyword in self.keywords:

@@ -15,9 +15,29 @@ from passage_extraction import PassageExtractor
 from problem_classification import ProblemClassifier
 from utils import *
 
-# def replace_newlines(text):
-#     """ Replace newlines with paragraph tags """
-#     return text.replace('\n', '<p>')
+def replace_newlines(text):
+    """ Replace newlines with periods to split sentence on newlines """
+    return text.replace('\n', '.')
+
+def replace_carriage_returns(text):
+    """ Replace carriage returns with spaces """
+    return text.replace('\r', ' ')
+
+def replace_xa0(text):
+    """ Replace non-breaking space with space """
+    return text.replace(u'\xa0', u' ')
+
+def replace_multiple_spaces(text):
+    """ Replace multiple spaces with single space """
+    return ' '.join(text.split())
+
+def replace_all(text):
+    text = replace_newlines(text)
+    text = replace_carriage_returns(text)
+    text = replace_xa0(text)
+    text = replace_multiple_spaces(text)
+
+    return text
 
 def fetch_process_warc_records(row, s3client, keywords):
     """Fetch all WARC records defined by filenames and offsets in batch,
@@ -41,6 +61,8 @@ def fetch_process_warc_records(row, s3client, keywords):
         soup = BeautifulSoup(page, 'lxml', parse_only=only_paragraphs)
 
         text = soup.get_text()
+
+        text = replace_all(text)
 
         extractor = PassageExtractor(text, keywords)
         extracts += extractor.extract_relevant_passages()
@@ -97,7 +119,8 @@ if __name__ == "__main__":
     query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={partition_n} ORDER BY crawl, url_host_tld, fetch_time OFFSET {batch_n_within_partition*args.batch_size} LIMIT {args.batch_size}'
     # query = f'SELECT * FROM urls_merged_cc_to_download WHERE partition={batch_n+1}' # +1 because partitions start at 1 not 0
 
-    df = wr.athena.read_sql_query(sql=query, database="ccindex", boto3_session=session)
+    df = exponential_backoff(wr.athena.read_sql_query, sql=query, database='ccindex', boto3_session=session)
+    # df = wr.athena.read_sql_query(sql=query, database='ccindex', boto3_session=session)
     assert len(df) > 1, "Empty input table!"
 
     # get unique crawl ids
@@ -120,10 +143,7 @@ if __name__ == "__main__":
     df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
 
     # save domains without any mentions of keywords
-    domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'crawl', 'fetch_time']]
-    # domains_without_mentions.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/{crawls_name}_{batch_n}.csv',
-    #                                 index=False,
-    #                                 lineterminator='\n')
+    domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'url_host_tld', 'crawl', 'fetch_time']].drop_duplicates()
     s3path = f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/{crawls_name}_{batch_n}.parquet'
     wr.s3.to_parquet(df=domains_without_mentions, path=s3path, index=False, compression='gzip')
 
@@ -145,10 +165,6 @@ if __name__ == "__main__":
 
     # save non-english pages to S3
     non_english = df[df.lang != 'en']
-    non_english.to_csv(f's3://{args.output_bucket}/{args.result_output_path}/non_english/{crawls_name}_{batch_n}.csv',
-                       index=False,
-                       lineterminator='\n')
-
     s3path = f's3://{args.output_bucket}/{args.result_output_path}/non_english/{crawls_name}_{batch_n}.parquet'
     wr.s3.to_parquet(df=non_english, path=s3path, index=False, compression='gzip')
 
@@ -182,14 +198,12 @@ if __name__ == "__main__":
         topic_keywords = json.load(url)
     problem_classifier = ProblemClassifier(topic_keywords)
     df = pd.concat([df, df['paragraph'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
-    # df = pd.concat([df, df['translated_paragraphs'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
     print(f'Success! Finished problem classification in {time.process_time() - start} seconds.')
 
     # sentiment analysis
     print('Starting sentiment analysis...')
     start = time.process_time()
     df['sentiment'] = df.paragraph.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
-    # df['sentiment'] = df.translated_paragraphs.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
     print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
     s3path = f's3://{args.output_bucket}/{args.result_output_path}/english/{crawls_name}_{batch_n}.parquet'

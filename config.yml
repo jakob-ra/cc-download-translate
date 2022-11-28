@@ -18,7 +18,7 @@ result_output_path: 'cc-download-problems-sentiment' # path in output_bucket to 
 
 ## download settings
 crawls: # crawls to include (can be multiple), for list see https://commoncrawl.org/the-data/get-started/
-  - 'CC-MAIN-2020-34'
+  - 'CC-MAIN-2020-40'
 #  - 'CC-MAIN-2020-05'
 #  - 'CC-MAIN-2020-10'
 #  - 'CC-MAIN-2020-16'
