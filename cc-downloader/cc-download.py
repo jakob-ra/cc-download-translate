@@ -97,6 +97,10 @@ if __name__ == "__main__":
     parser.add_argument("--keywords_path", type=str, required=True) # default='https://github.com/jakob-ra/cc-download/raw/main/cc-download/keywords.csv')
     parser.add_argument("--topic_keywords_path", type=str, required=True)
     args = parser.parse_args()
+    # args = parser.parse_args(['--batch_size', '10000', '--batches_per_partition', '1', '--output_bucket',
+    #                           'cc-extract', '--result_output_path', 'test', '--keywords_path',
+    #                           'https://github.com/jakob-ra/cc-download-translate/raw/main/keywords.csv',
+    #                           '--topic_keywords_path', 'https://github.com/jakob-ra/cc-download-translate/raw/main/topic_keywords.json'])
 
     keywords = pd.read_csv(args.keywords_path).squeeze().tolist()
 
@@ -143,7 +147,7 @@ if __name__ == "__main__":
     df.drop(columns=['warc_filename', 'warc_record_offset', 'warc_record_end'], inplace=True)
 
     # save domains without any mentions of keywords
-    domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'url_host_tld', 'crawl', 'fetch_time']].drop_duplicates()
+    domains_without_mentions = df[df.paragraphs.str.len() == 0][['url_host_registered_domain', 'url_host_tld', 'crawl', 'fetch_time']].drop_duplicates(subset=['url_host_registered_domain', 'crawl'])
     s3path = f's3://{args.output_bucket}/{args.result_output_path}/domains_without_mentions/{crawls_name}_{batch_n}.parquet'
     wr.s3.to_parquet(df=domains_without_mentions, path=s3path, index=False, compression='gzip')
 
