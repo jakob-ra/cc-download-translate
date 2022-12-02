@@ -18,12 +18,10 @@ result_output_path: 'cc-download-problems-sentiment' # path in output_bucket to 
 
 ## download settings
 crawls: # crawls to include (can be multiple), for list see https://commoncrawl.org/the-data/get-started/
-  - 'CC-MAIN-2020-45'
-#  - 'CC-MAIN-2020-50'
-#  - 'CC-MAIN-2021-04'
-#  - 'CC-MAIN-2021-10'
-#  - 'CC-MAIN-2021-17'
-#  - 'CC-MAIN-2021-21'
+  - 'CC-MAIN-2022-21'
+  - 'CC-MAIN-2022-27'
+  - 'CC-MAIN-2022-33'
+  - 'CC-MAIN-2022-40'
 
 n_subpages_per_domain: 20 # maximum number of subpages to download per domain (downloads the n_subpages_per_domain subpages with the shortest url)
 limit_pages_url_keywords: 100 # maximum number of subpages containing a keyword from the url keyword list to download per domain

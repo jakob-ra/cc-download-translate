@@ -169,8 +169,9 @@ if __name__ == "__main__":
 
     # save non-english pages to S3
     non_english = df[df.lang != 'en']
-    s3path = f's3://{args.output_bucket}/{args.result_output_path}/non_english/{crawls_name}_{batch_n}.parquet'
-    wr.s3.to_parquet(df=non_english, path=s3path, index=False, compression='gzip')
+    if len(non_english) > 0:
+        s3path = f's3://{args.output_bucket}/{args.result_output_path}/non_english/{crawls_name}_{batch_n}.parquet'
+        wr.s3.to_parquet(df=non_english, path=s3path, index=False, compression='gzip')
 
     # continue with english pages
     df = df[df.lang == 'en'].copy(deep=True)
@@ -195,23 +196,24 @@ if __name__ == "__main__":
     # df['translated_paragraphs'] = df.translated_paragraphs.astype(str).str.strip()
     # print(f'Success! Finished translation in {time.process_time() - start} seconds.')
 
-    # problem classification
-    print('Starting problem classification...')
-    start = time.process_time()
-    with urlopen(args.topic_keywords_path) as url:
-        topic_keywords = json.load(url)
-    problem_classifier = ProblemClassifier(topic_keywords)
-    df = pd.concat([df, df['paragraph'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
-    print(f'Success! Finished problem classification in {time.process_time() - start} seconds.')
+    if len(df) > 0:
+        # problem classification
+        print('Starting problem classification...')
+        start = time.process_time()
+        with urlopen(args.topic_keywords_path) as url:
+            topic_keywords = json.load(url)
+        problem_classifier = ProblemClassifier(topic_keywords)
+        df = pd.concat([df, df['paragraph'].apply(problem_classifier.classify).apply(pd.Series)], axis=1)
+        print(f'Success! Finished problem classification in {time.process_time() - start} seconds.')
 
-    # sentiment analysis
-    print('Starting sentiment analysis...')
-    start = time.process_time()
-    df['sentiment'] = df.paragraph.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
-    print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
+        # sentiment analysis
+        print('Starting sentiment analysis...')
+        start = time.process_time()
+        df['sentiment'] = df.paragraph.apply(str).apply(lambda x: TextBlob(x).sentiment.polarity)
+        print(f'Success! Finished sentiment analysis in {time.process_time() - start} seconds.')
 
-    s3path = f's3://{args.output_bucket}/{args.result_output_path}/english/{crawls_name}_{batch_n}.parquet'
-    wr.s3.to_parquet(df=df, path=s3path, index=False, compression='gzip')
+        s3path = f's3://{args.output_bucket}/{args.result_output_path}/english/{crawls_name}_{batch_n}.parquet'
+        wr.s3.to_parquet(df=df, path=s3path, index=False, compression='gzip')
 
 
 
