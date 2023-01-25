@@ -21,6 +21,9 @@ transfer speed is maximal because we access the CommonCrawl data from the same A
 
 ## How to run
 
+### Download and install AWS Command Line Interface
+Download and install AWS CLI following [these](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) instructions.
+
 ### AWS Permissions & Authentication
 
 To run the script, you first need to make an [AWS account](https://aws.amazon.com/). You then need
